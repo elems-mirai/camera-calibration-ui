@@ -53,7 +53,7 @@ class MainUI(QDialog):
         self.Open_folder_tab1.show()
 
         self.Open_folder = QPushButton("Open Folder", self.tab_2)
-        self.Open_folder.setGeometry(40, 460, 201, 51)
+        self.Open_folder.setGeometry(2240, 1090, 201, 51)
         self.Open_folder.setStyleSheet("font-size: 18pt;")
         self.Open_folder.show()
 
