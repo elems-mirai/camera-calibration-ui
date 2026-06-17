@@ -1,0 +1,366 @@
+import os
+import cv2
+import numpy as np
+import time
+from PyQt5.QtWidgets import QFileDialog, QApplication, QMessageBox
+from PyQt5.QtCore import QTimer
+from utils.cv_utils import cvimg_to_qpixmap, detect_and_set_cameras_tab1
+from utils import calibration
+from PyQt5.QtWidgets import QFileDialog, QMessageBox
+from PyQt5.QtCore import Qt
+import os
+
+os.environ["QT_LOGGING_RULES"] = "qt.qpa.wayland.warning=false" 
+class Tab1Handler:
+    """Handles Tab1: image loading, camera control, and intrinsic calibration."""
+
+    def __init__(self, main_ui):
+        self.ui = main_ui
+        self.cap = None
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.update_camera_frame)
+        self.fps = (1000 // self.ui.frame_rate)
+
+        self.images = []
+        self.image_names = []
+        self.current_image_name = None
+        self.current_original_image = None
+        self.capture_folder = None
+        self.intrinsic_folder = None
+        self.ui.camera_data = None
+
+        detect_and_set_cameras_tab1(self)
+
+    # -------------------------------------------------
+    # TAB CONTROL
+    # -------------------------------------------------
+    def on_tab_changed(self, index):
+        """Clear Tab1 display when leaving the tab"""
+        tab1_index = self.ui.tabWidget.indexOf(self.ui.tab)
+        if index != tab1_index:
+            if self.cap:
+                self.close_camera()
+            self.ui._display_target_tab1.clear()
+            print("[Tab1] Cleared display because tab was changed")
+
+    def open_folder(self):
+        """Open folder dialog and set up extrinsic calibration directories."""
+        try:
+            # Create QFileDialog manually to ensure visibility and focus
+            QApplication.setAttribute(Qt.AA_DontUseNativeMenuBar, True)
+
+            # Open dialog
+            base_dir = QFileDialog.getExistingDirectory(
+                self.ui,
+                "Select Save Folder",
+                "",
+                QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks
+            )
+
+            # Exit if user cancelled
+            if not base_dir:
+                print("[INFO] No folder selected.")
+                return
+
+            # Folder structure setup
+            self.capture_folder = base_dir
+            self.intrinsic_folder = os.path.join(base_dir, "intrinsic_images")
+            self.ui.camera_data = os.path.join(base_dir, "camera_data")
+            self.ui.points_csv = os.path.join(base_dir, "points.csv")
+
+            # Create folders if missing
+            os.makedirs(self.intrinsic_folder, exist_ok=True)
+            os.makedirs(self.ui.camera_data, exist_ok=True)
+
+            # Load existing images
+            self.images = []
+            self.image_names = []
+            self.load_images_from_directory(self.intrinsic_folder)
+
+            print(f"[Tab2] Folder opened: {base_dir}")
+
+        except Exception as e:
+            QMessageBox.critical(self.ui, "Error", f"Failed to open folder:\n{e}")
+            print(f"[Tab2] Error during folder open: {e}")
+    # -------------------------------------------------
+    # CAMERA CONTROL
+    # -------------------------------------------------
+    def on_camera_changed(self):
+        """When user selects a camera and save folder."""
+        new_camera_id = self.ui.AvailableCams_tab1.currentData()
+        print(f"[Tab1] Switched to Camera {new_camera_id}")
+
+        QApplication.setAttribute(Qt.AA_DontUseNativeMenuBar, True)
+
+        # Open dialog
+        base_dir = QFileDialog.getExistingDirectory(
+            self.ui,
+            "Select Save Folder",
+            "",
+            QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks
+        )
+
+        # Exit if user cancelled
+        if not base_dir:
+            print("[INFO] No folder selected.")
+            return
+
+        # Folder structure
+        self.capture_folder = base_dir
+        self.intrinsic_folder = os.path.join(base_dir, "intrinsic_images")
+        self.ui.camera_data = os.path.join(base_dir, "camera_data")
+        self.ui.points_csv = os.path.join(base_dir, "points.csv")
+
+        # Create folders if missing
+        os.makedirs(self.intrinsic_folder, exist_ok=True)
+        os.makedirs(self.ui.camera_data, exist_ok=True)
+
+        # Load existing images
+        self.images = []
+        self.image_names = []
+        self.load_images_from_directory(self.intrinsic_folder)
+
+        # Restart camera feed
+        if self.cap:
+            self.timer.stop()
+            self.cap.release()
+            self.cap = None
+
+        self.cap = cv2.VideoCapture(new_camera_id)
+        if not self.cap.isOpened():
+            print(f"[WARN] Failed to open camera {new_camera_id}")
+            return
+
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.ui.width)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.ui.height)
+        self.set_resolution_camera()
+        self.timer.start(self.fps)
+
+    def set_resolution_camera(self):
+        """Add current camera resolution to combo box."""
+        resolution = f"{int(self.ui.width)}x{int(self.ui.height)}"
+        self.ui.CameraDemBox_tab1.clear()
+        self.ui.CameraDemBox_tab1.addItems([resolution])
+        self.ui.CameraDemBox_tab1.setCurrentText(resolution)
+
+    def open_camera(self):
+        """Open current camera."""
+        if self.cap is None:
+            camera_id = self.get_select_camera()
+            self.cap = cv2.VideoCapture(camera_id)
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.ui.width)
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.ui.height)
+            self.set_resolution_camera()
+        self.timer.start(self.fps)
+
+    def close_camera(self):
+        """Stop camera feed and clear the display."""
+        if self.timer.isActive():
+            self.timer.stop()
+        if self.cap:
+            self.cap.release()
+            self.cap = None
+        self.ui._display_target_tab1.clear()
+        print("[Tab1] Camera closed")
+
+    def get_select_camera(self):
+        """Return selected camera ID."""
+        return self.ui.AvailableCams_tab1.currentData()
+
+    def update_camera_frame(self):
+        """Display live feed (optimized for ClickableLabel)."""
+        if getattr(self.ui._display_target_tab1, "_dragging", False):
+            return
+
+        if self.cap:
+            ret, frame = self.cap.read()
+            if ret:
+                # During camera feed, disable zoom/pan
+                self.ui._display_target_tab1._interaction_enabled = False
+
+                if not getattr(self, "_camera_view_active", False):
+                    self.ui._display_target_tab1.reset_view()
+                    self._camera_view_active = True
+
+                pixmap = cvimg_to_qpixmap(frame)
+                self.ui._display_target_tab1.setPixmap(pixmap)
+
+
+
+    # -------------------------------------------------
+    # CAPTURE IMAGE
+    # -------------------------------------------------
+    def take_picture(self):
+        """Capture and save image to intrinsic_images folder."""
+        if not self.cap:
+            print("[Tab1] Camera not open!")
+            return
+
+        ret, frame = self.cap.read()
+        if not ret:
+            print("[Tab1] Failed to capture")
+            return
+
+        # Folder safety
+        if not self.intrinsic_folder:
+            base_dir = QFileDialog.getExistingDirectory(self.ui, "Select Save Folder")
+            if not base_dir:
+                return
+            self.capture_folder = base_dir
+            self.intrinsic_folder = os.path.join(base_dir, "intrinsic_images")
+            self.ui.camera_data = os.path.join(base_dir, "camera_data")
+            os.makedirs(self.intrinsic_folder, exist_ok=True)
+            os.makedirs(self.ui.camera_data, exist_ok=True)
+
+        filename = f"capture_{time.strftime('%Y%m%d_%H%M%S')}.jpg"
+        save_path = os.path.join(self.intrinsic_folder, filename)
+        cv2.imwrite(save_path, frame)
+
+                # --- Avoid duplicate image names ---
+        if filename not in self.image_names:
+            self.images.append(frame.copy())
+            self.image_names.append(filename)
+            self.ui.list_model.setStringList(self.image_names)
+            print(f"[Tab2] Added new image: {filename}")
+        else:
+            print(f"[Tab2] Skipped duplicate image name: {filename}")
+
+        self.flash_effect()
+        self.close_camera()
+        self.display_image(frame)
+        self.current_image_name = filename
+        self.current_original_image = frame.copy()
+        print(f"[Tab1] Captured and saved {filename}")
+
+    def flash_effect(self):
+        """Quick white flash after capture."""
+        from PyQt5.QtGui import QPixmap, QColor
+        w, h = self.ui._display_target_tab1.width(), self.ui._display_target_tab1.height()
+        flash = QPixmap(w, h)
+        flash.fill(QColor("white"))
+        self.ui._display_target_tab1.setPixmap(flash)
+        QApplication.processEvents()
+        QTimer.singleShot(150, lambda: None)
+
+    # -------------------------------------------------
+    # IMAGE MANAGEMENT
+    # -------------------------------------------------
+    def load_images_from_directory(self, folder_path):
+        """Load all images and show first one."""
+        if not os.path.exists(folder_path):
+            os.makedirs(folder_path, exist_ok=True)
+            print(f"[INFO] Created folder: {folder_path}")
+            return
+
+        self.images.clear()
+        self.image_names.clear()
+
+        for filename in sorted(os.listdir(folder_path)):
+            if filename.lower().endswith((".png", ".jpg", ".jpeg", ".bmp")):
+                img_path = os.path.join(folder_path, filename)
+                img = cv2.imread(img_path)
+                if img is not None:
+                    self.images.append(img)
+                    self.image_names.append(filename)
+
+        self.ui.list_model.setStringList(self.image_names)
+        print(f"[Tab1] Loaded {len(self.images)} images from {folder_path}")
+
+        if self.images:
+            self.current_original_image = self.images[0].copy()
+            self.current_image_name = self.image_names[0]
+            self.display_image(self.images[0])
+            print(f"[Tab1] Showing first image: {self.current_image_name}")
+
+    def delete_selected_image(self):
+        """Delete selected image from folder and UI."""
+        if not self.current_image_name:
+            print("[Tab1] No image selected to delete.")
+            return
+
+        image_name = self.current_image_name
+        image_path = os.path.join(self.intrinsic_folder, image_name)
+
+        reply = QMessageBox.question(
+            self.ui,
+            "Delete Image",
+            f"Are you sure you want to delete '{image_name}'?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        if os.path.exists(image_path):
+            try:
+                os.remove(image_path)
+                print(f"[Tab1] Deleted file: {image_path}")
+            except Exception as e:
+                print(f"[Tab1] Failed to delete: {e}")
+
+        if image_name in self.image_names:
+            idx = self.image_names.index(image_name)
+            del self.image_names[idx]
+            del self.images[idx]
+
+        self.ui.list_model.setStringList(self.image_names)
+        self.ui._display_target_tab1.clear()
+
+        if self.image_names:
+            next_idx = min(idx, len(self.image_names) - 1)
+            self.current_image_name = self.image_names[next_idx]
+            self.current_original_image = self.images[next_idx].copy()
+            self.display_image(self.images[next_idx])
+        else:
+            self.current_image_name = None
+            self.current_original_image = None
+            print("[Tab1] All images deleted — reopening camera...")
+            self.open_camera()
+
+    def show_selected_image_index(self, index):
+        row = index.row()
+        if 0 <= row < len(self.images):
+            if self.timer.isActive():
+                self.timer.stop()
+
+            self.current_image_name = self.image_names[row]
+            self.current_original_image = self.images[row].copy()
+            self.display_image(self.images[row])
+
+            print(f"[Tab1] Current image set to: {self.current_image_name}")
+
+    # -------------------------------------------------
+    # DISPLAY & CALIBRATION
+    # -------------------------------------------------
+    def display_image(self, img):
+        """Display captured/static image (zoom/pan enabled)."""
+        self._camera_view_active = False
+        self.ui._display_target_tab1._interaction_enabled = True  # ✅ allow zoom/pan
+        pixmap = cvimg_to_qpixmap(img)
+        self.ui._display_target_tab1.reset_view()
+        self.ui._display_target_tab1.setPixmap(pixmap)
+
+
+
+    def get_checkerboard_size(self):
+        """Return checkerboard size (w, h)."""
+        text = self.ui.CheckerBoardSizeBox.currentText().strip()
+        if "x" in text:
+            try:
+                w, h = map(int, text.split("x"))
+                return w, h
+            except ValueError:
+                print("[Tab1] Invalid checkerboard format!")
+                return 0, 0
+        return 0, 0
+
+    def intrinsic_calibrate(self):
+        """Run intrinsic calibration."""
+        checkerboard = self.get_checkerboard_size()
+        calibration.intrinsic_calibrate(
+            self.images,
+            self.image_names,
+            checkerboard,
+            square_size=0.022,
+            save_path=self.ui.camera_data,
+            display_callback=self.display_image
+        )

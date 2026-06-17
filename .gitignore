@@ -1,0 +1,12 @@
+.venv/
+.vscode/
+camera1/
+camera2/
+camera11/
+camera_test/
+__pycache__/
+UI_vault/
+*.jpg
+*.png
+labeled_c1_camera_data
+test

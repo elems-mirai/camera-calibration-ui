@@ -1,0 +1,1077 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Dialog</class>
+ <widget class="QDialog" name="Dialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>2600</width>
+    <height>1359</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Dialog</string>
+  </property>
+  <widget class="QTabWidget" name="tabWidget">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>20</y>
+     <width>2541</width>
+     <height>1341</height>
+    </rect>
+   </property>
+   <property name="currentIndex">
+    <number>1</number>
+   </property>
+   <widget class="QWidget" name="tab">
+    <attribute name="title">
+     <string>Tab 1</string>
+    </attribute>
+    <widget class="QListView" name="imageList">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>670</y>
+       <width>271</width>
+       <height>611</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 14pt;</string>
+     </property>
+     <property name="editTriggers">
+      <set>QAbstractItemView::NoEditTriggers</set>
+     </property>
+    </widget>
+    <widget class="QLabel" name="CheckerBoardSize">
+     <property name="geometry">
+      <rect>
+       <x>20</x>
+       <y>16</y>
+       <width>221</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+     <property name="text">
+      <string>Checker board Size:</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="cameraWindow">
+     <property name="geometry">
+      <rect>
+       <x>300</x>
+       <y>20</y>
+       <width>1920</width>
+       <height>1280</height>
+      </rect>
+     </property>
+     <property name="mouseTracking">
+      <bool>false</bool>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">border: 2px solid black;
+border-radius: 5px;
+background-color: white;</string>
+     </property>
+     <property name="lineWidth">
+      <number>1</number>
+     </property>
+     <property name="text">
+      <string/>
+     </property>
+    </widget>
+    <widget class="QLabel" name="Source">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>630</y>
+       <width>261</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+     <property name="text">
+      <string>Source: intrinsic_images</string>
+     </property>
+    </widget>
+    <widget class="QComboBox" name="CheckerBoardSizeBox">
+     <property name="geometry">
+      <rect>
+       <x>50</x>
+       <y>50</y>
+       <width>181</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+     <item>
+      <property name="text">
+       <string>10x7</string>
+      </property>
+     </item>
+    </widget>
+    <widget class="QPushButton" name="IntrinsicCalibrate">
+     <property name="geometry">
+      <rect>
+       <x>20</x>
+       <y>570</y>
+       <width>211</width>
+       <height>51</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+     <property name="text">
+      <string>Intrinsic Calibrate</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="CameraView_tab1">
+     <property name="geometry">
+      <rect>
+       <x>20</x>
+       <y>270</y>
+       <width>211</width>
+       <height>61</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+     <property name="text">
+      <string>Camera View</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="Take_a_Pic_tab1">
+     <property name="geometry">
+      <rect>
+       <x>20</x>
+       <y>360</y>
+       <width>211</width>
+       <height>51</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+     <property name="text">
+      <string>Take a Picture</string>
+     </property>
+    </widget>
+    <widget class="QComboBox" name="AvailableCams_tab1">
+     <property name="geometry">
+      <rect>
+       <x>40</x>
+       <y>140</y>
+       <width>181</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_24">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>100</y>
+       <width>221</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+     <property name="text">
+      <string>Available Cameras:</string>
+     </property>
+    </widget>
+    <widget class="QComboBox" name="CameraDemBox_tab1">
+     <property name="geometry">
+      <rect>
+       <x>40</x>
+       <y>210</y>
+       <width>181</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="DeleteImage_tab1">
+     <property name="geometry">
+      <rect>
+       <x>20</x>
+       <y>500</y>
+       <width>211</width>
+       <height>51</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;background:red;</string>
+     </property>
+     <property name="text">
+      <string>Delete image</string>
+     </property>
+    </widget>
+   </widget>
+   <widget class="QWidget" name="tab_2">
+    <attribute name="title">
+     <string>Tab 2</string>
+    </attribute>
+    <widget class="QPushButton" name="Take_a_Pic">
+     <property name="geometry">
+      <rect>
+       <x>40</x>
+       <y>220</y>
+       <width>201</width>
+       <height>61</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+     <property name="text">
+      <string>Take a Picture</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="cameraWindow_3">
+     <property name="geometry">
+      <rect>
+       <x>310</x>
+       <y>10</y>
+       <width>1920</width>
+       <height>1280</height>
+      </rect>
+     </property>
+     <property name="mouseTracking">
+      <bool>false</bool>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">border: 2px solid black;
+border-radius: 5px;
+background-color: white;</string>
+     </property>
+     <property name="lineWidth">
+      <number>1</number>
+     </property>
+     <property name="text">
+      <string/>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="ExtrinsicCalibrate">
+     <property name="geometry">
+      <rect>
+       <x>30</x>
+       <y>1090</y>
+       <width>261</width>
+       <height>161</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+     <property name="text">
+      <string>Extrinsic Calibrate</string>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="ImgPnt5X">
+     <property name="geometry">
+      <rect>
+       <x>100</x>
+       <y>690</y>
+       <width>71</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+     <property name="readOnly">
+      <bool>true</bool>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_13">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>840</y>
+       <width>71</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;color:blue;</string>
+     </property>
+     <property name="text">
+      <string>P3: x=</string>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="WrldPnt5X">
+     <property name="geometry">
+      <rect>
+       <x>80</x>
+       <y>930</y>
+       <width>81</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="ImgPnt2X">
+     <property name="geometry">
+      <rect>
+       <x>100</x>
+       <y>570</y>
+       <width>71</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+     <property name="readOnly">
+      <bool>true</bool>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="WrldPnt2Y">
+     <property name="geometry">
+      <rect>
+       <x>210</x>
+       <y>810</y>
+       <width>81</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+    </widget>
+    <widget class="QRadioButton" name="imgPnt4">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>650</y>
+       <width>91</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;color:rgb(204,102,0)</string>
+     </property>
+     <property name="text">
+      <string>P4: x=</string>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="WrldPnt5Y">
+     <property name="geometry">
+      <rect>
+       <x>210</x>
+       <y>930</y>
+       <width>81</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_18">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>770</y>
+       <width>71</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;color: red;</string>
+     </property>
+     <property name="text">
+      <string>P1: x=</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_8">
+     <property name="geometry">
+      <rect>
+       <x>180</x>
+       <y>640</y>
+       <width>31</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;color:rgb(204,102,0)</string>
+     </property>
+     <property name="text">
+      <string>y=</string>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="WrldPnt1Y">
+     <property name="geometry">
+      <rect>
+       <x>210</x>
+       <y>772</y>
+       <width>81</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_6">
+     <property name="geometry">
+      <rect>
+       <x>180</x>
+       <y>600</y>
+       <width>41</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt; color: blue;</string>
+     </property>
+     <property name="text">
+      <string>y=</string>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="WrldPnt4Y">
+     <property name="geometry">
+      <rect>
+       <x>210</x>
+       <y>890</y>
+       <width>81</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="ImgPnt4Y">
+     <property name="geometry">
+      <rect>
+       <x>210</x>
+       <y>650</y>
+       <width>71</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+     <property name="readOnly">
+      <bool>true</bool>
+     </property>
+    </widget>
+    <widget class="QRadioButton" name="imgPnt5">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>690</y>
+       <width>81</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="autoFillBackground">
+      <bool>true</bool>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;color: #FF007F;</string>
+     </property>
+     <property name="text">
+      <string>P5: x=</string>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="WrldPnt3X">
+     <property name="geometry">
+      <rect>
+       <x>80</x>
+       <y>850</y>
+       <width>81</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="WrldPnt4X">
+     <property name="geometry">
+      <rect>
+       <x>80</x>
+       <y>890</y>
+       <width>81</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_15">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>880</y>
+       <width>71</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;color:rgb(204,102,0)</string>
+     </property>
+     <property name="text">
+      <string>P4: x=</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_3">
+     <property name="geometry">
+      <rect>
+       <x>180</x>
+       <y>520</y>
+       <width>41</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;color:red;</string>
+     </property>
+     <property name="text">
+      <string>y=</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_11">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>920</y>
+       <width>71</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;color: #FF007F;</string>
+     </property>
+     <property name="text">
+      <string>P5: x=</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_10">
+     <property name="geometry">
+      <rect>
+       <x>180</x>
+       <y>680</y>
+       <width>31</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;color: #FF007F;</string>
+     </property>
+     <property name="text">
+      <string>y=</string>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="WrldPnt3Y">
+     <property name="geometry">
+      <rect>
+       <x>210</x>
+       <y>850</y>
+       <width>81</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+    </widget>
+    <widget class="QRadioButton" name="imgPnt3">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>610</y>
+       <width>91</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt; color: blue;</string>
+     </property>
+     <property name="text">
+      <string>P3: x=</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_17">
+     <property name="geometry">
+      <rect>
+       <x>180</x>
+       <y>880</y>
+       <width>31</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;color:rgb(204,102,0)</string>
+     </property>
+     <property name="text">
+      <string>y=</string>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="WrldPnt2X">
+     <property name="geometry">
+      <rect>
+       <x>80</x>
+       <y>810</y>
+       <width>81</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_19">
+     <property name="geometry">
+      <rect>
+       <x>180</x>
+       <y>920</y>
+       <width>41</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;color: #FF007F;</string>
+     </property>
+     <property name="text">
+      <string>y=</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_16">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>800</y>
+       <width>71</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;color: green</string>
+     </property>
+     <property name="text">
+      <string>P2: x=</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_21">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>470</y>
+       <width>271</width>
+       <height>51</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+     <property name="text">
+      <string>Image coordinate (pixel)</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_20">
+     <property name="geometry">
+      <rect>
+       <x>180</x>
+       <y>800</y>
+       <width>41</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;color: green</string>
+     </property>
+     <property name="text">
+      <string>y=</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_22">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>740</y>
+       <width>241</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+     <property name="text">
+      <string>World coordinate (cm)</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_12">
+     <property name="geometry">
+      <rect>
+       <x>180</x>
+       <y>770</y>
+       <width>31</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;color: red;</string>
+     </property>
+     <property name="text">
+      <string>y=</string>
+     </property>
+    </widget>
+    <widget class="QRadioButton" name="imgPnt1">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>530</y>
+       <width>81</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;color:red;</string>
+     </property>
+     <property name="text">
+      <string>P1: x=</string>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="ImgPnt1Y">
+     <property name="geometry">
+      <rect>
+       <x>210</x>
+       <y>530</y>
+       <width>71</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+     <property name="readOnly">
+      <bool>true</bool>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="ImgPnt2Y">
+     <property name="geometry">
+      <rect>
+       <x>210</x>
+       <y>570</y>
+       <width>71</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+     <property name="readOnly">
+      <bool>true</bool>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="ImgPnt3Y">
+     <property name="geometry">
+      <rect>
+       <x>210</x>
+       <y>610</y>
+       <width>71</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+     <property name="readOnly">
+      <bool>true</bool>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="WrldPnt1X">
+     <property name="geometry">
+      <rect>
+       <x>80</x>
+       <y>772</y>
+       <width>81</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="ImgPnt4X">
+     <property name="geometry">
+      <rect>
+       <x>100</x>
+       <y>650</y>
+       <width>71</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+     <property name="readOnly">
+      <bool>true</bool>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="ImgPnt1X">
+     <property name="geometry">
+      <rect>
+       <x>100</x>
+       <y>530</y>
+       <width>71</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+     <property name="readOnly">
+      <bool>true</bool>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_4">
+     <property name="geometry">
+      <rect>
+       <x>180</x>
+       <y>560</y>
+       <width>31</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;color:green;</string>
+     </property>
+     <property name="text">
+      <string>y=</string>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="ImgPnt5Y">
+     <property name="geometry">
+      <rect>
+       <x>210</x>
+       <y>690</y>
+       <width>71</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+     <property name="readOnly">
+      <bool>true</bool>
+     </property>
+    </widget>
+    <widget class="QRadioButton" name="imgPnt2">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>570</y>
+       <width>91</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;color:green;</string>
+     </property>
+     <property name="text">
+      <string>P2: x=</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_14">
+     <property name="geometry">
+      <rect>
+       <x>180</x>
+       <y>840</y>
+       <width>31</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;color:blue;</string>
+     </property>
+     <property name="text">
+      <string>y=</string>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="ImgPnt3X">
+     <property name="geometry">
+      <rect>
+       <x>100</x>
+       <y>610</y>
+       <width>71</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+     <property name="readOnly">
+      <bool>true</bool>
+     </property>
+    </widget>
+    <widget class="QListView" name="imageList_3">
+     <property name="geometry">
+      <rect>
+       <x>2240</x>
+       <y>100</y>
+       <width>281</width>
+       <height>981</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 14pt;</string>
+     </property>
+     <property name="editTriggers">
+      <set>QAbstractItemView::NoEditTriggers</set>
+     </property>
+    </widget>
+    <widget class="QComboBox" name="CameraDemBox">
+     <property name="geometry">
+      <rect>
+       <x>50</x>
+       <y>90</y>
+       <width>191</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="CameraView">
+     <property name="geometry">
+      <rect>
+       <x>40</x>
+       <y>150</y>
+       <width>201</width>
+       <height>51</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+     <property name="text">
+      <string>Camera View</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="ClearPoints">
+     <property name="geometry">
+      <rect>
+       <x>40</x>
+       <y>320</y>
+       <width>201</width>
+       <height>51</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;background:orange;</string>
+     </property>
+     <property name="text">
+      <string>Clear points</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="DeleteImage">
+     <property name="geometry">
+      <rect>
+       <x>40</x>
+       <y>390</y>
+       <width>201</width>
+       <height>51</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;background:red</string>
+     </property>
+     <property name="text">
+      <string>Delete image</string>
+     </property>
+    </widget>
+    <widget class="QComboBox" name="AvailableCams">
+     <property name="geometry">
+      <rect>
+       <x>50</x>
+       <y>40</y>
+       <width>191</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_23">
+     <property name="geometry">
+      <rect>
+       <x>30</x>
+       <y>10</y>
+       <width>221</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+     <property name="text">
+      <string>Available Cameras:</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label">
+     <property name="geometry">
+      <rect>
+       <x>2260</x>
+       <y>40</y>
+       <width>121</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+     <property name="text">
+      <string>Images:</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="Calculate_points">
+     <property name="geometry">
+      <rect>
+       <x>50</x>
+       <y>970</y>
+       <width>191</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 18pt;</string>
+     </property>
+     <property name="text">
+      <string>Calculate 3</string>
+     </property>
+    </widget>
+   </widget>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

@@ -1,0 +1,1 @@
+"""Qt validation tool package."""
