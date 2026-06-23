@@ -79,3 +79,52 @@ femto_bolt/
 - Use the same image resolution for calibration images from one camera.
 - Run intrinsic calibration before extrinsic calibration.
 - The current intrinsic square size in the code is `0.022` meters, meaning 22 mm checkerboard squares.
+
+## Quick Usage Commands
+
+Run all commands from the project directory:
+
+```bash
+cd /home/elems/Documents/camera-calibration-ui
+source .venv/bin/activate
+```
+
+### 1. Capture IP-Camera Intrinsic Images
+
+```bash
+python3 tools/capture_images.py
+```
+
+Enter the camera password when prompted. Keep the preview window focused:
+
+- Press `Enter` to save an image.
+- Press `q` or `Esc` to stop.
+- Images are saved in `Cameras/ip_camera/intrinsic_images/`.
+
+### 2. Start the Calibration UI
+
+```bash
+python3 main.py
+```
+
+In the intrinsic calibration tab, click `Open Folder` and select:
+
+```text
+/home/elems/Documents/camera-calibration-ui/Cameras/ip_camera
+```
+
+Run intrinsic calibration before extrinsic calibration. Calibration results are
+saved in `Cameras/ip_camera/camera_data/`.
+
+### 3. Record the Undistorted Stream
+
+After intrinsic calibration has created the camera-data files, run:
+
+```bash
+python3 tools/record_undistorted_video.py
+```
+
+The tool shows the undistorted stream and records it immediately:
+
+- Press `q` or `Esc` to stop and finalize the recording.
+- Videos are saved in `tools/output/` as standard H.264 MP4 files.
