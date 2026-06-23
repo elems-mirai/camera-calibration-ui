@@ -31,11 +31,13 @@ class ClickableLabel(QLabel):
         # view state
         self._zoom_factor = 1.0
         self._pan_offset = QPoint(0, 0)
+        self._viewport_padding = 8
         self._dragging = False
         self._last_mouse_pos = None
         self._repaint_pending = False
 
         # drawing config
+        self._background_color = QColor("#f6f7f8")
         self._point_radius = 4
         self._font = QFont()
         self._font.setPointSize(9)
@@ -80,6 +82,7 @@ class ClickableLabel(QLabel):
             return
 
         painter = QPainter(self)
+        painter.fillRect(self.rect(), self._background_color)
         painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
 
         # --- Cached scaled pixmap ---
@@ -92,13 +95,14 @@ class ClickableLabel(QLabel):
 
         painter.drawPixmap(self._pan_offset, self._cached_scaled_pixmap)
 
-        # --- Define P1–P5 colors ---
+        # --- Define P1-P6 colors ---
         colors = [
             QColor(255, 0, 0),     # P1 - Red
             QColor(0, 255, 0),     # P2 - Green
             QColor(0, 0, 255),     # P3 - Blue
             QColor(204, 102, 0),   # P4 - Orange
-            QColor(255, 0, 255)    # P5 - Magenta
+            QColor(255, 0, 255),   # P5 - Magenta
+            QColor(0, 140, 160),   # P6 - Teal
         ]
 
         # --- Draw filled points ---
@@ -107,7 +111,7 @@ class ClickableLabel(QLabel):
             sx = int(x * self._zoom_factor) + self._pan_offset.x()
             sy = int(y * self._zoom_factor) + self._pan_offset.y()
 
-            color = colors[(idx - 1) % len(colors)]  # wrap safely 1–5
+            color = colors[(idx - 1) % len(colors)]
             painter.setBrush(color)
             painter.setPen(Qt.black)  # black border for contrast
             painter.drawEllipse(QRect(sx - 5, sy - 5, 10, 10))  # filled circle
@@ -210,13 +214,15 @@ class ClickableLabel(QLabel):
         pix_h = self._original_pixmap.height()
         label_w = max(1, self.width())
         label_h = max(1, self.height())
+        usable_w = max(1, label_w - 2 * self._viewport_padding)
+        usable_h = max(1, label_h - 2 * self._viewport_padding)
 
-        self._zoom_factor = min(label_w / pix_w, label_h / pix_h)
+        self._zoom_factor = min(usable_w / pix_w, usable_h / pix_h)
         scaled_w = int(pix_w * self._zoom_factor)
         scaled_h = int(pix_h * self._zoom_factor)
         self._pan_offset = QPoint(
-            max(0, (label_w - scaled_w) // 2),
-            max(0, (label_h - scaled_h) // 2),
+            max(self._viewport_padding, (label_w - scaled_w) // 2),
+            max(self._viewport_padding, (label_h - scaled_h) // 2),
         )
 
     def _throttled_repaint(self, ms: int):

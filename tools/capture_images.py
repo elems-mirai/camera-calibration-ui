@@ -16,7 +16,7 @@ import cv2
 
 DEFAULT_HOST = "192.168.50.45"
 DEFAULT_USERNAME = "admin"
-DEFAULT_SAVE_PATH = Path(__file__).resolve().parents[1] / "Cameras" / "ip_camera" / "intrinsic_images"
+DEFAULT_SAVE_PATH = Path(__file__).resolve().parents[1] / "camera" / "ip_camera" / "intrinsic_images"
 
 
 def parse_args() -> argparse.Namespace:

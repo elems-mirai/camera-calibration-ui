@@ -23,6 +23,7 @@ def intrinsic_calibrate(
     image_paths=None,
     save_overlays=False,
     delete_failed=False,
+    cancel_callback=None,
 ):
     """
     Perform camera intrinsic calibration from a list of images.
@@ -72,7 +73,20 @@ def intrinsic_calibrate(
     print(f"[Calibration] Starting intrinsic calibration...")
     print(f"[Calibration] Looking for {checkerboard[0]}x{checkerboard[1]} checkerboard")
 
+    def is_cancelled():
+        if cancel_callback is None:
+            return False
+        try:
+            return bool(cancel_callback())
+        except Exception:
+            return False
+
     for idx, image in enumerate(images):
+        QApplication.processEvents()
+        if is_cancelled():
+            print(f"[Calibration] Cancelled after {idx} / {len(images)} images.")
+            return None, None
+
         print(f"[Calibration] Processing {idx + 1}/{len(images)}: {image_names[idx]}")
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
@@ -80,6 +94,17 @@ def intrinsic_calibrate(
             gray, checkerboard,
             cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_FAST_CHECK + cv2.CALIB_CB_NORMALIZE_IMAGE
         )
+        if not ret and hasattr(cv2, "findChessboardCornersSB"):
+            ret, corners = cv2.findChessboardCornersSB(
+                gray,
+                checkerboard,
+                cv2.CALIB_CB_NORMALIZE_IMAGE,
+            )
+
+        QApplication.processEvents()
+        if is_cancelled():
+            print(f"[Calibration] Cancelled after {idx + 1} / {len(images)} images.")
+            return None, None
 
         if ret:
             threedpoints.append(objp)
@@ -89,7 +114,7 @@ def intrinsic_calibrate(
             vis = cv2.drawChessboardCorners(image.copy(), checkerboard, corners2, ret)
             processed_images.append(vis)
             successful += 1
-            print(f"[Calibration] ✓ Checkerboard detected")
+            print("[Calibration] Checkerboard detected")
 
             if display_callback:
                 display_callback(vis)
@@ -101,7 +126,7 @@ def intrinsic_calibrate(
             if image_paths:
                 kept_paths.append(image_paths[idx])
         else:
-            print(f"[Calibration] ✗ No checkerboard found")
+            print("[Calibration] No checkerboard found")
             processed_images.append(image.copy())
             if delete_failed and image_paths:
                 try:
@@ -110,8 +135,12 @@ def intrinsic_calibrate(
                 except Exception as e:
                     print(f"[Calibration] Failed to delete image: {e}")
 
-    # ✅ Summary line added here
     print(f"[Calibration Summary] Detected checkerboard in {successful} out of {len(images)} images.")
+
+    QApplication.processEvents()
+    if is_cancelled():
+        print("[Calibration] Cancelled before solve step.")
+        return None, None
 
     if successful < 3:
         print("[Calibration] Error: Need at least 3 valid images!")
@@ -148,7 +177,7 @@ def intrinsic_calibrate(
     np.save(os.path.join(save_path, "new_camera_matrix.npy"), new_cameraMatrix)
     np.save(os.path.join(save_path, "roi.npy"), roi)
 
-    print("[Calibration] ✓ Results saved in", os.path.abspath(save_path))
+    print("[Calibration] Results saved in", os.path.abspath(save_path))
     intrinsic_show_popup(successful, len(images), calibration_rms=calibration_rms, mean_error=mean_error)
 
     return cameraMatrix, distCoeffs
@@ -364,7 +393,7 @@ def extrinsic_calibrate(points_csv, save_path):
     np.save(os.path.join(save_path, "Rt_matrix.npy"),         Rt)
     np.save(os.path.join(save_path, "projection_matrix.npy"), projMatrix)
 
-    print("[Calibration] ✓ Extrinsic calibration saved in", os.path.abspath(save_path))
+    print("[Calibration] Extrinsic calibration saved in", os.path.abspath(save_path))
     sms_data = error_checker(save_path, points_csv)
     extrinsic_show_popup(sms_data)
     return rvec, tvec
@@ -378,142 +407,207 @@ def extrinsic_show_popup(data):
         print("[Popup] Skipped extrinsic popup (no QApplication).")
         return
 
-    # ── Group by image ───────────────────────────────────────────
-    grouped = {}
-    for d in data:
-        grouped.setdefault(d["Image name"], []).append(d)
-
-    def fmt(v):
-        try:
-            f = float(v)
-            if math.isnan(f) or np.isinf(f):
-                return "  nan  "
-            return f"{f:>7.3f}"
-        except Exception:
-            return str(v)
-
-    # ── Build text ───────────────────────────────────────────────
-    col = 52   # column width per method block
-    sep = "─" * (col * 2 + 7)
-
-    lines = [
-        "✅ Extrinsic Calibration — Dual Method Error Report",
-        sep,
-        f"  {'':6}  {'':6}  {'Correct':^14}  "
-        f"{'─── Method A (original K) ───':^{col}}  "
-        f"{'─── Method B (new K / undistorted) ───':^{col}}",
-        f"  {'u':>6}  {'v':>6}  {'X':>6} {'Y':>6}  "
-        f"{'Pred_X':>7} {'Pred_Y':>7}  {'Err_X':>8} {'Err_Y':>8}    "
-        f"{'Pred_X':>7} {'Pred_Y':>7}  {'Err_X':>8} {'Err_Y':>8}",
-        sep,
-    ]
-
     all_errs_A, all_errs_B = [], []
+    for row in data:
+        all_errs_A.append(math.sqrt(row["A_Error_X"]**2 + row["A_Error_Y"]**2))
+        all_errs_B.append(math.sqrt(row["B_Error_X"]**2 + row["B_Error_Y"]**2))
 
-    for img, entries in grouped.items():
-        lines.append(f"\n📷  {img}")
-        lines.append("─" * (col * 2 + 7))
-
-        for e in entries:
-            lines.append(
-                f"  {e['u']:>6.1f}  {e['v']:>6.1f}  "
-                f"{e['Correct_X']:>6.2f} {e['Correct_Y']:>6.2f}  "
-                f"{fmt(e['A_Predicted_X'])} {fmt(e['A_Predicted_Y'])}  "
-                f"{fmt(e['A_Error_X'])} {fmt(e['A_Error_Y'])}    "
-                f"{fmt(e['B_Predicted_X'])} {fmt(e['B_Predicted_Y'])}  "
-                f"{fmt(e['B_Error_X'])} {fmt(e['B_Error_Y'])}"
-            )
-            all_errs_A.append(
-                math.sqrt(e["A_Error_X"]**2 + e["A_Error_Y"]**2)
-            )
-            all_errs_B.append(
-                math.sqrt(e["B_Error_X"]**2 + e["B_Error_Y"]**2)
-            )
-
-        lines.append("")
-
-    # ── Summary block ────────────────────────────────────────────
     def _band(err):
-        if   err < 0.5:  return "🟢 Excellent", "#27ae60"
-        elif err < 1.0:  return "🟡 Good",      "#f1c40f"
-        elif err < 2.0:  return "🟠 Medium",    "#e67e22"
-        else:            return "🔴 Poor",       "#e74c3c"
+        if math.isnan(err) or np.isinf(err):
+            return "N/A", "#666666"
+        if err < 0.5:
+            return "Excellent", "#2b8a3e"
+        if err < 1.0:
+            return "Good", "#7a5b00"
+        if err < 2.0:
+            return "Medium", "#b45f06"
+        return "Poor", "#d9534f"
 
     mean_A = sum(all_errs_A) / len(all_errs_A) if all_errs_A else float("nan")
     mean_B = sum(all_errs_B) / len(all_errs_B) if all_errs_B else float("nan")
     label_A, color_A = _band(mean_A)
     label_B, color_B = _band(mean_B)
 
-    lines += [
-        sep,
-        f"  SUMMARY",
-        f"  Method A (original K + dist):       "
-        f"mean RMSE = {mean_A:.4f}  →  {label_A}",
-        f"  Method B (new K / undistorted img): "
-        f"mean RMSE = {mean_B:.4f}  →  {label_B}",
-        sep,
-    ]
-
-    message = "\n".join(lines)
-
-    # ── Dialog ───────────────────────────────────────────────────
     from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout,
-                                  QTextEdit, QPushButton, QLabel, QFrame)
+                                  QPushButton, QLabel, QFrame, QSizePolicy,
+                                  QTableWidget, QTableWidgetItem, QHeaderView)
     from PyQt5.QtCore import Qt as _Qt
 
     dialog = QDialog()
     dialog.setWindowTitle("Extrinsic Calibration Results")
-    dialog.resize(1300, 660)
+    dialog.resize(1180, 650)
+    dialog.setMinimumSize(960, 520)
+    dialog.setStyleSheet(
+        """
+        QDialog {
+            background-color: #ececec;
+            color: #222222;
+            font-family: "Segoe UI", "Ubuntu", sans-serif;
+        }
+        QLabel {
+            font-size: 12px;
+        }
+        QTableWidget {
+            background-color: #ffffff;
+            alternate-background-color: #f8f8f8;
+            color: #111111;
+            font-family: "Consolas", "Courier New", "Monaco", monospace;
+            font-size: 12px;
+            border: 1px solid #bcbcbc;
+            gridline-color: #dcdcdc;
+            selection-background-color: #d8e8f7;
+            selection-color: #111111;
+        }
+        QHeaderView::section {
+            background-color: #e0e0e0;
+            color: #222222;
+            padding: 5px;
+            font-weight: 700;
+            border: 1px solid #bcbcbc;
+        }
+        QFrame#metric_card {
+            background-color: #ffffff;
+            border: 1px solid #bcbcbc;
+            border-radius: 4px;
+        }
+        QPushButton#action_btn {
+            background-color: #005a9e;
+            color: #ffffff;
+            border: 1px solid #004b85;
+            font-weight: bold;
+            padding: 6px 20px;
+            border-radius: 2px;
+            font-size: 12px;
+        }
+        QPushButton#action_btn:hover {
+            background-color: #0063ad;
+        }
+        """
+    )
 
     outer = QVBoxLayout(dialog)
-    outer.setSpacing(10)
+    outer.setSpacing(14)
     outer.setContentsMargins(16, 16, 16, 16)
 
-    # Scrollable text
-    text_edit = QTextEdit()
-    text_edit.setReadOnly(True)
-    text_edit.setText(message)
-    text_edit.setStyleSheet("font-family: Consolas, monospace; font-size: 10pt;")
-    outer.addWidget(text_edit)
+    title = QLabel("Extrinsic Calibration - Dual Method Error Report")
+    title.setStyleSheet("font-size: 14px; font-weight: 700; color: #222222;")
+    outer.addWidget(title)
 
-    # ── Colored summary stickers ─────────────────────────────────
-    sticker_row = QHBoxLayout()
-    sticker_row.setSpacing(16)
+    headers = [
+        "Image",
+        "u",
+        "v",
+        "X",
+        "Y",
+        "A Pred X",
+        "A Pred Y",
+        "A Err X",
+        "A Err Y",
+        "B Pred X",
+        "B Pred Y",
+        "B Err X",
+        "B Err Y",
+    ]
+    table = QTableWidget(len(data), len(headers))
+    table.setHorizontalHeaderLabels(headers)
+    table.verticalHeader().setVisible(False)
+    table.setAlternatingRowColors(True)
+    table.setSelectionBehavior(QTableWidget.SelectRows)
+    table.setSelectionMode(QTableWidget.SingleSelection)
+    table.setEditTriggers(QTableWidget.NoEditTriggers)
 
-    for method, mean_err, label, color in [
-        ("Method A\n(original K + distortion)", mean_A, label_A, color_A),
-        ("Method B\n(new K / undistorted image)", mean_B, label_B, color_B),
+    def set_table_item(row_idx, col_idx, value, numeric=False):
+        if numeric:
+            try:
+                text = f"{float(value):.3f}"
+            except (TypeError, ValueError):
+                text = str(value)
+        else:
+            text = str(value)
+
+        item = QTableWidgetItem(text)
+        item.setTextAlignment(_Qt.AlignRight | _Qt.AlignVCenter if numeric else _Qt.AlignLeft | _Qt.AlignVCenter)
+        table.setItem(row_idx, col_idx, item)
+
+    for row_idx, row in enumerate(data):
+        values = [
+            (row["Image name"], False),
+            (row["u"], True),
+            (row["v"], True),
+            (row["Correct_X"], True),
+            (row["Correct_Y"], True),
+            (row["A_Predicted_X"], True),
+            (row["A_Predicted_Y"], True),
+            (row["A_Error_X"], True),
+            (row["A_Error_Y"], True),
+            (row["B_Predicted_X"], True),
+            (row["B_Predicted_Y"], True),
+            (row["B_Error_X"], True),
+            (row["B_Error_Y"], True),
+        ]
+        for col_idx, (value, numeric) in enumerate(values):
+            set_table_item(row_idx, col_idx, value, numeric=numeric)
+
+    header = table.horizontalHeader()
+    header.setSectionResizeMode(QHeaderView.Interactive)
+    header.setStretchLastSection(False)
+    table.setColumnWidth(0, 220)
+    for col in range(1, len(headers)):
+        table.setColumnWidth(col, 82)
+    table.resizeRowsToContents()
+    outer.addWidget(table, 1)
+
+    cards_row = QHBoxLayout()
+    cards_row.setSpacing(16)
+
+    def build_metric_card(method, subtitle, mean_err, label, color):
+        card = QFrame()
+        card.setObjectName("metric_card")
+        card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(16, 14, 16, 14)
+        layout.setSpacing(6)
+
+        title_label = QLabel(method)
+        title_label.setAlignment(_Qt.AlignCenter)
+        title_label.setStyleSheet("font-size: 14px; font-weight: 700; color: #333333;")
+
+        subtitle_label = QLabel(subtitle)
+        subtitle_label.setAlignment(_Qt.AlignCenter)
+        subtitle_label.setStyleSheet("font-size: 11px; color: #777777;")
+
+        status_label = QLabel(label)
+        status_label.setAlignment(_Qt.AlignCenter)
+        status_label.setStyleSheet(f"font-size: 18px; font-weight: 700; color: {color};")
+
+        rmse_label = QLabel(f"RMSE = {mean_err:.4f} px")
+        rmse_label.setAlignment(_Qt.AlignCenter)
+        rmse_label.setStyleSheet("font-size: 13px; font-weight: 600; color: #222222;")
+
+        layout.addWidget(title_label)
+        layout.addWidget(subtitle_label)
+        layout.addSpacing(6)
+        layout.addWidget(status_label)
+        layout.addWidget(rmse_label)
+        return card
+
+    for method, subtitle, mean_err, label, color in [
+        ("Method A", "original K + distortion", mean_A, label_A, color_A),
+        ("Method B", "new K / undistorted image", mean_B, label_B, color_B),
     ]:
-        box = QLabel(
-            f"<div style='text-align:center;'>"
-            f"<b style='font-size:10pt;'>{method.replace(chr(10),'<br>')}</b><br><br>"
-            f"<span style='font-size:22pt;'>{label.split()[0]}</span><br>"
-            f"<span style='font-size:12pt; font-weight:bold; color:{color};'>"
-            f"  {label.split(None,1)[1]}</span><br>"
-            f"<span style='font-size:11pt;'>RMSE = {mean_err:.4f} px</span>"
-            f"</div>"
-        )
-        box.setAlignment(_Qt.AlignCenter)
-        box.setStyleSheet(
-            f"background-color: {color}22;"
-            f"border: 2px solid {color};"
-            f"border-radius: 8px;"
-            f"padding: 12px;"
-            f"min-width: 260px;"
-        )
-        sticker_row.addWidget(box)
+        cards_row.addWidget(build_metric_card(method, subtitle, mean_err, label, color))
 
-    outer.addLayout(sticker_row)
+    outer.addLayout(cards_row)
 
-    # OK button
+    button_row = QHBoxLayout()
+    button_row.addStretch(1)
     ok_btn = QPushButton("OK")
-    ok_btn.setFixedHeight(36)
-    ok_btn.setStyleSheet(
-        "background-color: #2c3e50; color: white;"
-        "font-size: 11pt; font-weight: bold; border-radius: 6px;"
-    )
+    ok_btn.setObjectName("action_btn")
+    ok_btn.setMinimumWidth(120)
     ok_btn.clicked.connect(dialog.accept)
-    outer.addWidget(ok_btn)
+    button_row.addWidget(ok_btn)
+    outer.addLayout(button_row)
 
     dialog.exec_()
 #----------------------------------------------------------

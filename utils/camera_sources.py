@@ -8,8 +8,8 @@ import numpy as np
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CAMERA_FOLDERS = {
-    "ip_camera": PROJECT_ROOT / "Cameras" / "ip_camera",
-    "femto_bolt": PROJECT_ROOT / "Cameras" / "femto_bolt",
+    "ip_camera": PROJECT_ROOT / "camera" / "ip_camera",
+    "femto_bolt": PROJECT_ROOT / "camera" / "femto_bolt",
 }
 
 IP_CAMERA_HOST = os.environ.get("IP_CAMERA_HOST", "192.168.50.45")
@@ -17,11 +17,12 @@ IP_CAMERA_USERNAME = os.environ.get("IP_CAMERA_USERNAME", "admin")
 IP_CAMERA_STREAM_PATH = os.environ.get(
     "IP_CAMERA_STREAM_PATH", "/Streaming/Channels/101"
 )
+IP_CAMERA_DRAIN_FRAMES = max(0, int(os.environ.get("IP_CAMERA_DRAIN_FRAMES", "3")))
 FEMTO_COLOR_TOPIC = os.environ.get("FEMTO_COLOR_TOPIC", "/camera/color/image_raw")
 
 
 def default_camera_folder(source_key):
-    return str(DEFAULT_CAMERA_FOLDERS.get(source_key, PROJECT_ROOT / "Cameras"))
+    return str(DEFAULT_CAMERA_FOLDERS.get(source_key, PROJECT_ROOT / "camera"))
 
 
 def ensure_camera_folder(base_dir):
@@ -38,7 +39,13 @@ def build_ip_stream_url(password):
 
 class IPCameraStream:
     def __init__(self, password):
-        self.cap = cv2.VideoCapture(build_ip_stream_url(password), cv2.CAP_FFMPEG)
+        self.url = build_ip_stream_url(password)
+        os.environ.setdefault(
+            "OPENCV_FFMPEG_CAPTURE_OPTIONS",
+            "rtsp_transport;tcp|fflags;nobuffer|flags;low_delay|max_delay;500000",
+        )
+        self.cap = cv2.VideoCapture(self.url, cv2.CAP_FFMPEG)
+        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         if not self.cap.isOpened():
             self.cap.release()
 
@@ -46,7 +53,10 @@ class IPCameraStream:
         return self.cap.isOpened()
 
     def read(self):
-        return self.cap.read()
+        for _ in range(IP_CAMERA_DRAIN_FRAMES):
+            if not self.cap.grab():
+                break
+        return self.cap.retrieve()
 
     def release(self):
         self.cap.release()

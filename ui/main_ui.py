@@ -19,7 +19,7 @@ from PyQt5.QtWidgets import (
     QSplitter,
 )
 from PyQt5.uic import loadUi
-from PyQt5.QtCore import QStringListModel, Qt, QRect   # ✅ Add Qt here
+from PyQt5.QtCore import QStringListModel, Qt, QRect
 
 from ui.clickable_label import ClickableLabel
 from ui.tab1_handler import Tab1Handler
@@ -32,7 +32,20 @@ class MainUI(QDialog):
     def __init__(self):
         super(MainUI, self).__init__()
         loadUi("resources/main.ui", self)
+        self.setWindowFlags(
+            Qt.Window
+            | Qt.WindowTitleHint
+            | Qt.WindowSystemMenuHint
+            | Qt.WindowMinimizeButtonHint
+            | Qt.WindowMaximizeButtonHint
+            | Qt.WindowCloseButtonHint
+        )
+        self.setWindowModality(Qt.NonModal)
+        self.setSizeGripEnabled(True)
+        self.setMaximumSize(16777215, 16777215)
         self._ui_scale = 1.0
+        self._cancel_requested = False
+        self._shutting_down = False
 
         # --- Tab1 display with ClickableLabel ---
         self._display_target_tab1 = ClickableLabel(self.tab)
@@ -60,19 +73,17 @@ class MainUI(QDialog):
 
         self.width = 1920
         self.height = 1080
-        self.frame_rate = 8
+        self.frame_rate = 15
         self._setup_checkerboard_sizes()
         self._hide_resolution_controls()
 
         # --- Folder-only workflow controls ---
         self.Open_folder_tab1 = QPushButton("Open Folder", self.tab)
         self.Open_folder_tab1.setGeometry(self._scaled_rect(20, 430, 211, 51))
-        self.Open_folder_tab1.setStyleSheet(self._scaled_stylesheet("font-size: 18pt;"))
         self.Open_folder_tab1.show()
 
         self.Open_folder = QPushButton("Open Folder", self.tab_2)
         self.Open_folder.setGeometry(self._scaled_rect(2240, 1090, 201, 51))
-        self.Open_folder.setStyleSheet(self._scaled_stylesheet("font-size: 18pt;"))
         self.Open_folder.show()
         self.Calculate_points.setParent(None)
         self._create_p6_controls()
@@ -81,7 +92,6 @@ class MainUI(QDialog):
         # --- Handlers ---
         self.tab1 = Tab1Handler(self)
         self.tab2 = Tab2Handler(self)
-        self._shutting_down = False
 
         self.tabWidget.currentChanged.connect(self.on_tab_changed)
 
@@ -106,7 +116,7 @@ class MainUI(QDialog):
         self.ExtrinsicCalibrate.clicked.connect(self.tab2.run_extrinsic_calibration)
 
     def _setup_checkerboard_sizes(self):
-        sizes = ["11x8", "10x7", "9x6", "7x4", "6x9", "8x6", "7x5", "10x4"]
+        sizes = ["10x7", "11x8", "9x6", "7x4", "6x3", "6x9", "8x6", "7x5", "10x4"]
         current = self.CheckerBoardSizeBox.currentText().strip()
         if current and current not in sizes:
             sizes.insert(0, current)
@@ -122,7 +132,10 @@ class MainUI(QDialog):
 
     def _build_responsive_layout(self):
         self.setWindowTitle("Camera Calibration")
-        self.setMinimumSize(980, 640)
+        self.setMinimumSize(940, 560)
+        self.setMaximumSize(16777215, 16777215)
+        self.tab.setObjectName("main_panel")
+        self.tab_2.setObjectName("main_panel")
         screen = QApplication.primaryScreen()
         if screen is not None:
             available = screen.availableGeometry()
@@ -146,19 +159,73 @@ class MainUI(QDialog):
         self._build_tab2_layout()
 
     def _style_controls(self):
+        for widget in self.findChildren(QWidget):
+            widget.setStyleSheet("")
+
         self.setStyleSheet(
             """
-            QDialog { background: #f5f6f8; }
-            QTabWidget::pane { border: 1px solid #c8ccd2; background: #ffffff; }
-            QTabBar::tab { background: #e8eaed; border: 1px solid #c8ccd2; padding: 7px 20px; font-size: 10pt; font-weight: 600; }
-            QTabBar::tab:selected { background: #ffffff; border-bottom-color: #ffffff; }
-            QGroupBox { border: 1px solid #d1d5db; border-radius: 2px; margin-top: 10px; padding-top: 10px; font-weight: 600; background: #ffffff; }
-            QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; left: 8px; padding: 0 3px; }
-            QLabel, QRadioButton { font-size: 10pt; color: #24272c; }
-            QPushButton { min-height: 28px; padding: 4px 9px; font-size: 10pt; border: 1px solid #b8bec7; background: #f1f3f5; border-radius: 2px; }
-            QPushButton:hover { background: #e6e9ed; }
-            QComboBox, QLineEdit { min-height: 28px; font-size: 10pt; }
-            QListView { font-size: 10pt; border: 1px solid #c8ccd2; background: white; }
+            QDialog {
+                background-color: #ececec;
+                color: #222222;
+            }
+            QWidget#main_panel {
+                background-color: #ececec;
+                border: none;
+            }
+            QWidget, QLabel, QRadioButton, QComboBox, QPushButton, QLineEdit, QListView {
+                font-family: "Segoe UI", "Ubuntu", "Arial", sans-serif;
+                font-size: 12px;
+                color: #222222;
+            }
+            QTabWidget::pane {
+                border: 1px solid #bcbcbc;
+                background-color: #ececec;
+            }
+            QTabBar::tab {
+                background: #dcdcdc;
+                border: 1px solid #bcbcbc;
+                padding: 6px 12px;
+                min-width: 92px;
+                font-size: 12px;
+                font-weight: 600;
+                color: #444444;
+            }
+            QTabBar::tab:selected {
+                background: #ececec;
+                border-bottom-color: #ececec;
+                color: #000000;
+            }
+            QGroupBox {
+                border: 1px solid #c4c4c4;
+                border-radius: 2px;
+                margin-top: 12px;
+                padding-top: 12px;
+                font-weight: 600;
+                background: transparent;
+            }
+            QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; left: 8px; padding: 0 4px; }
+            QLabel { font-weight: normal; }
+            QPushButton {
+                min-height: 24px;
+                padding: 4px 8px;
+                border: 1px solid #aaaaaa;
+                background: #e0e0e0;
+                border-radius: 2px;
+                color: #111111;
+            }
+            QPushButton:hover { background: #d0d0d0; }
+            QPushButton:pressed { background: #c0c0c0; }
+            QComboBox, QLineEdit {
+                min-height: 24px;
+                background: #ffffff;
+                border: 1px solid #a0a0a0;
+                padding: 3px;
+                color: #000000;
+            }
+            QListView {
+                border: 1px solid #a0a0a0;
+                background: #ffffff;
+            }
             """
         )
         for button in [
@@ -170,13 +237,13 @@ class MainUI(QDialog):
             button.setStyleSheet("background: #005a9e; color: white; border: 1px solid #004b85; font-weight: 600;")
         self.DeleteImage_tab1.setStyleSheet("background: #fdf2f2; color: #a80000; border: 1px solid #d83b01;")
         self.DeleteImage.setStyleSheet("background: #fdf2f2; color: #a80000; border: 1px solid #d83b01;")
-        self.ClearPoints.setStyleSheet("background: #fff7db; color: #5c4200; border: 1px solid #d8a600;")
+        self.ClearPoints.setStyleSheet("")
 
     def _style_preview(self, widget):
         widget.setStyleSheet(
             "border: 1px solid #c8ccd2;"
             "border-radius: 2px;"
-            "background-color: #ffffff;"
+            "background-color: #f6f7f8;"
             "color: #8a929c;"
             "font-size: 14px;"
             "font-weight: 500;"
@@ -199,7 +266,7 @@ class MainUI(QDialog):
 
     def _build_tab1_layout(self):
         self.label_24.setText("Camera Source")
-        self.CheckerBoardSize.setText("Checkerboard")
+        self.CheckerBoardSize.setText("Checkerboard inner corners")
         self.Source.setText("Intrinsic Images")
 
         camera_group = QGroupBox("Camera Configuration")
@@ -239,6 +306,7 @@ class MainUI(QDialog):
         image_layout.addWidget(self.DeleteImage_tab1)
 
         left_panel = QWidget()
+        left_panel.setObjectName("main_panel")
         left_panel.setFixedWidth(240)
         controls = QVBoxLayout(left_panel)
         controls.setContentsMargins(0, 0, 0, 0)
@@ -252,7 +320,7 @@ class MainUI(QDialog):
             controls.addWidget(widget)
         controls.setStretch(3, 1)
 
-        self._display_target_tab1.setMinimumSize(640, 420)
+        self._display_target_tab1.setMinimumSize(520, 320)
         self._display_target_tab1.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self._style_preview(self._display_target_tab1)
 
@@ -306,6 +374,7 @@ class MainUI(QDialog):
         image_layout.addWidget(self.DeleteImage)
 
         left_panel = QWidget()
+        left_panel.setObjectName("main_panel")
         left_panel.setFixedWidth(240)
         controls = QVBoxLayout(left_panel)
         controls.setContentsMargins(0, 0, 0, 0)
@@ -319,7 +388,7 @@ class MainUI(QDialog):
             controls.addWidget(widget)
         controls.setStretch(3, 1)
 
-        self._display_target_tab2.setMinimumSize(360, 420)
+        self._display_target_tab2.setMinimumSize(240, 320)
         self._display_target_tab2.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self._style_preview(self._display_target_tab2)
 
@@ -332,6 +401,7 @@ class MainUI(QDialog):
             label.hide()
 
         right_widget = QWidget()
+        right_widget.setObjectName("main_panel")
         right_layout = QVBoxLayout(right_widget)
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.setSpacing(0)
@@ -510,13 +580,24 @@ class MainUI(QDialog):
     # --------------------------------------------
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
-            event.ignore()   # ✅ ESC is now ignored, program won’t quit
+            event.ignore()
         else:
             super().keyPressEvent(event)
+
+    def request_cancel(self):
+        self._cancel_requested = True
+
+    def clear_cancel_request(self):
+        if not self._shutting_down:
+            self._cancel_requested = False
+
+    def should_cancel(self):
+        return self._cancel_requested or self._shutting_down
 
     def shutdown(self):
         if self._shutting_down:
             return
+        self._cancel_requested = True
         self._shutting_down = True
 
         for handler in (getattr(self, "tab1", None), getattr(self, "tab2", None)):
@@ -534,5 +615,6 @@ class MainUI(QDialog):
         print("[MainUI] Shutdown complete")
 
     def closeEvent(self, event):
+        self.request_cancel()
         self.shutdown()
         event.accept()

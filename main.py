@@ -17,6 +17,7 @@ if __name__ == "__main__":
 
     def stop_app(*_):
         print("\n[Main] Stop requested")
+        ui.request_cancel()
         ui.close()
         app.quit()
 

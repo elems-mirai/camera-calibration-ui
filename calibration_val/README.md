@@ -20,8 +20,17 @@ python3 calibration_val/main.py
 - select a table row and click the image to fill or replace `u`, `v`
 - manually enter `Expected X`, `Expected Y`
 - press `Validate`
-- view predicted world coordinates and errors
-- export CSV as `points, xi, yi, xw, yw, x_error, y_error`
+- view predicted world coordinates, errors, and quality
+- export CSV as `points, xi, yi, xw, yw, x_error, y_error, error_norm, quality`
+
+## Quality Bands
+
+Quality is based on `Error Norm` in the same unit as the entered world coordinates:
+
+- `Excellent`: `< 1`
+- `Good`: `< 3`
+- `Medium`: `< 5`
+- `Poor`: `>= 5`
 
 ## Required Camera Files
 

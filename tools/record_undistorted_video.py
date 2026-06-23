@@ -17,7 +17,7 @@ import numpy as np
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_CALIBRATION_PATH = PROJECT_ROOT / "Cameras" / "ip_camera" / "camera_data"
+DEFAULT_CALIBRATION_PATH = PROJECT_ROOT / "camera" / "ip_camera" / "camera_data"
 DEFAULT_OUTPUT_PATH = Path(__file__).resolve().parent / "output"
 DEFAULT_HOST = "192.168.50.45"
 DEFAULT_USERNAME = "admin"

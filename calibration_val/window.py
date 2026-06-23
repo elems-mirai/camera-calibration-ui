@@ -41,6 +41,7 @@ class ValidationWindow(QMainWindow):
         "Error X",
         "Error Y",
         "Error Norm",
+        "Quality",
     ]
 
     def __init__(self) -> None:
@@ -117,6 +118,14 @@ class ValidationWindow(QMainWindow):
         self.status_label = QLabel("Select an image and camera data folder, then choose a row and click the image.")
         self.status_label.setWordWrap(True)
         left_panel.addWidget(self.status_label)
+
+        self.quality_label = QLabel("Quality: not validated")
+        self.quality_label.setAlignment(Qt.AlignCenter)
+        self.quality_label.setStyleSheet(
+            "background: #ffffff; border: 1px solid #bcc8b8; border-radius: 6px; "
+            "padding: 8px; font: 600 12px 'Segoe UI'; color: #223127;"
+        )
+        left_panel.addWidget(self.quality_label)
         left_panel.addStretch(1)
 
         preview_group = QGroupBox("Image Preview")
@@ -255,6 +264,7 @@ class ValidationWindow(QMainWindow):
         self.active_row = 0
         self.image_preview.reset_points()
         self.image_preview.set_active_point(1)
+        self._reset_quality_summary()
         self._set_status(f"Prepared {count} point rows. Row 1 is active for image clicking.")
 
     def validate_points(self) -> None:
@@ -312,6 +322,8 @@ class ValidationWindow(QMainWindow):
             "yw",
             "x_error",
             "y_error",
+            "error_norm",
+            "quality",
         ]
         rows = []
         for row in range(self.points_table.rowCount()):
@@ -324,6 +336,8 @@ class ValidationWindow(QMainWindow):
                     "yw": self._cell_text(row, 4),
                     "x_error": self._cell_text(row, 7),
                     "y_error": self._cell_text(row, 8),
+                    "error_norm": self._cell_text(row, 9),
+                    "quality": self._cell_text(row, 10),
                 }
             )
 
@@ -391,7 +405,9 @@ class ValidationWindow(QMainWindow):
             self._set_result_item(row, 7, result.error_x)
             self._set_result_item(row, 8, result.error_y)
             self._set_result_item(row, 9, result.error_norm)
+            self._set_quality_item(row, 10, result.error_norm)
         self.points_table.resizeColumnsToContents()
+        self._update_quality_summary(results)
 
     def _set_readonly_item(self, row: int, column: int, value: str) -> None:
         item = QTableWidgetItem(value)
@@ -402,6 +418,47 @@ class ValidationWindow(QMainWindow):
         item = QTableWidgetItem(f"{value:.1f}")
         item.setFlags(item.flags() & ~Qt.ItemIsEditable)
         self.points_table.setItem(row, column, item)
+
+    def _set_quality_item(self, row: int, column: int, error_norm: float) -> None:
+        quality, bg, fg = self._quality_for_error(error_norm)
+        item = QTableWidgetItem(quality)
+        item.setTextAlignment(Qt.AlignCenter)
+        item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+        item.setBackground(QColor(bg))
+        item.setForeground(QColor(fg))
+        self.points_table.setItem(row, column, item)
+
+    def _quality_for_error(self, error_norm: float) -> tuple[str, str, str]:
+        if error_norm < 1.0:
+            return "Excellent", "#d9f2df", "#17692e"
+        if error_norm < 3.0:
+            return "Good", "#fff3bf", "#7a5b00"
+        if error_norm < 5.0:
+            return "Medium", "#ffe0c2", "#8a3b00"
+        return "Poor", "#ffd6d6", "#8a0000"
+
+    def _update_quality_summary(self, results: List[PointResult]) -> None:
+        if not results:
+            self._reset_quality_summary()
+            return
+
+        mean_error = sum(result.error_norm for result in results) / len(results)
+        max_error = max(result.error_norm for result in results)
+        quality, bg, fg = self._quality_for_error(mean_error)
+        self.quality_label.setText(
+            f"Quality: {quality} | mean error {mean_error:.2f} | max error {max_error:.2f}"
+        )
+        self.quality_label.setStyleSheet(
+            f"background: {bg}; border: 1px solid {fg}; border-radius: 6px; "
+            f"padding: 8px; font: 600 12px 'Segoe UI'; color: {fg};"
+        )
+
+    def _reset_quality_summary(self) -> None:
+        self.quality_label.setText("Quality: not validated")
+        self.quality_label.setStyleSheet(
+            "background: #ffffff; border: 1px solid #bcc8b8; border-radius: 6px; "
+            "padding: 8px; font: 600 12px 'Segoe UI'; color: #223127;"
+        )
 
     def _set_readonly_text(self, row: int, column: int, value: str) -> None:
         item = QTableWidgetItem(value)
@@ -449,7 +506,7 @@ class ValidationWindow(QMainWindow):
         return os.path.splitext(self.image_path)[0] + ".csv"
 
     def _initialize_empty_csv(self, path: str) -> None:
-        headers = ["points", "xi", "yi", "xw", "yw", "x_error", "y_error"]
+        headers = ["points", "xi", "yi", "xw", "yw", "x_error", "y_error", "error_norm", "quality"]
         with open(path, "w", newline="", encoding="utf-8") as csv_file:
             writer = csv.writer(csv_file)
             writer.writerow(headers)
@@ -477,6 +534,8 @@ class ValidationWindow(QMainWindow):
             yw = self._row_value(row, ("yw", "expected_y", "y", "world_y"))
             x_error = self._row_value(row, ("x_error", "error_x"))
             y_error = self._row_value(row, ("y_error", "error_y"))
+            error_norm = self._row_value(row, ("error_norm", "norm"))
+            quality = self._row_value(row, ("quality", "status"))
 
             self._set_readonly_item(index, 0, point_id)
             self._set_editable_text(index, 1, xi)
@@ -487,7 +546,8 @@ class ValidationWindow(QMainWindow):
             self._set_readonly_text(index, 6, "")
             self._set_readonly_text(index, 7, x_error)
             self._set_readonly_text(index, 8, y_error)
-            self._set_readonly_text(index, 9, "")
+            self._set_readonly_text(index, 9, error_norm)
+            self._set_readonly_text(index, 10, quality)
 
             if xi != "" and yi != "":
                 try:

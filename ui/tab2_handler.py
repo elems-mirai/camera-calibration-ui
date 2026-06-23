@@ -5,8 +5,6 @@ import time
 import pandas as pd
 from PyQt5.QtWidgets import QFileDialog, QApplication, QMessageBox, QInputDialog, QLineEdit
 from PyQt5.QtCore import QTimer
-from PyQt5.QtGui import QDoubleValidator
-from PyQt5.QtCore import Qt
 
 from utils.cv_utils import cvimg_to_qpixmap
 from utils.camera_sources import (
@@ -15,7 +13,6 @@ from utils.camera_sources import (
     ensure_camera_folder,
 )
 from utils.io_utils import save_points
-from utils.point_pred import predict_checkerboard_points
 from utils.calibration import extrinsic_calibrate
 
 os.environ["QT_LOGGING_RULES"] = "qt.qpa.wayland.warning=false"
@@ -38,7 +35,7 @@ class Tab2Handler:
         self.current_original_image = None
         self.latest_frame = None
         self.capture_folder = None
-        self.extrinsic_folder = None          # ✅ FIX 4: always initialised
+        self.extrinsic_folder = None
         self.current_camera_id = "ip_camera"
         self._camera_folders = {}
         self.ui.camera_data = None
@@ -47,13 +44,12 @@ class Tab2Handler:
         self._ip_password = os.environ.get("CAMERA_PASSWORD")
         self._apply_folder(default_camera_folder(self.current_camera_id), camera_id=self.current_camera_id)
 
-        # ✅ FIX 5: only one validator call
         self._setup_validators()
-        self._setup_point_connections()       # ✅ FIX 2: connections wired once here
+        self._setup_point_connections()
         self.ui.imgPnt1.setChecked(True)
 
     # -------------------------------------------------
-    # VALIDATORS  (fix 5 — single call, no conflict)
+    # VALIDATORS
     # -------------------------------------------------
     def _setup_validators(self):
         """Float-only input; no commas allowed."""
@@ -69,7 +65,7 @@ class Tab2Handler:
         print("[Tab2] Validators set.")
 
     # -------------------------------------------------
-    # POINT CONNECTIONS  (fix 2 — wired once, no stacking)
+    # POINT CONNECTIONS
     # -------------------------------------------------
     def _setup_point_connections(self):
         """Wire returnPressed once per field. Click callback set separately."""
@@ -175,7 +171,7 @@ class Tab2Handler:
             QMessageBox.critical(self.ui, "Error", f"Failed to open folder:\n{e}")
 
     # -------------------------------------------------
-    # CAMERA  (fix 1 — no folder dialog here)
+    # CAMERA
     # -------------------------------------------------
     def on_camera_changed(self):
         """Switch between the supported camera sources without probing webcams."""
@@ -207,6 +203,8 @@ class Tab2Handler:
             try:
                 self.cap = create_camera_source(source_key, password=password)
             except Exception as e:
+                if source_key == "ip_camera":
+                    self._ip_password = None
                 QMessageBox.critical(self.ui, "Camera Error", str(e))
                 self.cap = None
                 return
@@ -375,37 +373,19 @@ class Tab2Handler:
     # -------------------------------------------------
     # POINT MANAGEMENT
     # -------------------------------------------------
-    def Calculate_3points(self):
-        wx1 = self._point_map[1][3].text().strip()
-        wy1 = self._point_map[1][4].text().strip()
-        wx2 = self._point_map[2][3].text().strip()
-        wy2 = self._point_map[2][4].text().strip()
-        if wx1 and wy1 and wx2 and wy2:
-            try:
-                wx1, wy1, wx2, wy2 = map(float, [wx1, wy1, wx2, wy2])
-                pred_pts = predict_checkerboard_points((wx1, wy1), (wx2, wy2), rows=8, cols=5)
-                for k in range(3, 6):
-                    px, py = pred_pts[k - 1]
-                    self._point_map[k][3].setText(f"{px:.1f}")
-                    self._point_map[k][4].setText(f"{py:.1f}")
-                self.auto_save_points()
-                print("[Tab2] Points 3–5 predicted.")
-            except Exception as e:
-                print(f"[Tab2] Prediction failed: {e}")
-
     def clear_points_button(self):
-        """Clear displayed points and image coords from UI; keep world coords in CSV."""
+        """Clear displayed points and point fields for the current image."""
         self.ui.imgPnt1.setChecked(True)
-        if not self.current_image_name:
-            return
 
         self.ui._display_target_tab2.clear_points()
         for i in range(1, 7):
             getattr(self.ui, f"ImgPnt{i}X").clear()
             getattr(self.ui, f"ImgPnt{i}Y").clear()
-            # ✅ FIX 3: also clear world point fields
             getattr(self.ui, f"WrldPnt{i}X").clear()
             getattr(self.ui, f"WrldPnt{i}Y").clear()
+
+        if not self.current_image_name:
+            return
 
         csv_file = self.ui.points_csv
         if not os.path.exists(csv_file):
@@ -432,7 +412,6 @@ class Tab2Handler:
 
         image_name = self.current_image_name
 
-        # ✅ FIX 4: guard against extrinsic_folder not set
         if not self.extrinsic_folder:
             print("[Tab2] extrinsic_folder not set — cannot locate file to delete.")
         else:
@@ -504,6 +483,8 @@ class Tab2Handler:
 
             for _, row in rows.iterrows():
                 pt = int(row["points"])
+                if pt not in self._point_map:
+                    continue
                 xi, yi, xw, yw = row["xi"], row["yi"], row["xw"], row["yw"]
                 if pd.notna(xi):
                     self._point_map[pt][1].setText(str(int(xi)))
@@ -579,8 +560,8 @@ class Tab2Handler:
                 return
             rvec, tvec = extrinsic_calibrate(points_csv, save_path)
             if rvec is not None and tvec is not None:
-                print(f"[Tab2] ✓ Calibration done\nrvec:\n{rvec}\ntvec:\n{tvec}")
+                print(f"[Tab2] Calibration done\nrvec:\n{rvec}\ntvec:\n{tvec}")
             else:
-                print("[Tab2] ✗ Calibration failed")
+                print("[Tab2] Calibration failed")
         except Exception as e:
             print(f"[Tab2] Calibration error: {e}")

@@ -1,9 +1,9 @@
 import os
 import cv2
-import numpy as np
 import time
-from PyQt5.QtWidgets import QFileDialog, QApplication, QMessageBox, QInputDialog, QLineEdit
+from PyQt5.QtWidgets import QApplication, QFileDialog, QInputDialog, QLineEdit, QMessageBox
 from PyQt5.QtCore import QTimer
+from PyQt5.QtCore import Qt
 from utils.cv_utils import cvimg_to_qpixmap
 from utils.camera_sources import (
     create_camera_source,
@@ -11,9 +11,6 @@ from utils.camera_sources import (
     ensure_camera_folder,
 )
 from utils import calibration
-from PyQt5.QtWidgets import QFileDialog, QMessageBox
-from PyQt5.QtCore import Qt
-import os
 
 os.environ["QT_LOGGING_RULES"] = "qt.qpa.wayland.warning=false" 
 class Tab1Handler:
@@ -39,7 +36,6 @@ class Tab1Handler:
 
         self.ui.AvailableCams_tab1.clear()
         self.ui.AvailableCams_tab1.addItem("IP Camera", "ip_camera")
-        self.ui.AvailableCams_tab1.addItem("Femto Bolt", "femto_bolt")
         self._apply_source_folder(self.current_source)
 
     # -------------------------------------------------
@@ -75,11 +71,11 @@ class Tab1Handler:
 
             self._apply_folder(base_dir)
 
-            print(f"[Tab2] Folder opened: {base_dir}")
+            print(f"[Tab1] Folder opened: {base_dir}")
 
         except Exception as e:
             QMessageBox.critical(self.ui, "Error", f"Failed to open folder:\n{e}")
-            print(f"[Tab2] Error during folder open: {e}")
+            print(f"[Tab1] Error during folder open: {e}")
     # -------------------------------------------------
     # CAMERA CONTROL
     # -------------------------------------------------
@@ -108,6 +104,8 @@ class Tab1Handler:
             try:
                 self.cap = create_camera_source(source_key, password=password)
             except Exception as e:
+                if source_key == "ip_camera":
+                    self._ip_password = None
                 QMessageBox.critical(self.ui, "Camera Error", str(e))
                 self.cap = None
                 return
@@ -174,7 +172,6 @@ class Tab1Handler:
             ret, frame = self.cap.read()
             if ret:
                 self.latest_frame = frame.copy()
-                # During camera feed, disable zoom/pan
                 self.ui._display_target_tab1._interaction_enabled = False
 
                 if not getattr(self, "_camera_view_active", False):
@@ -221,14 +218,13 @@ class Tab1Handler:
         save_path = os.path.join(self.intrinsic_folder, filename)
         cv2.imwrite(save_path, frame)
 
-                # --- Avoid duplicate image names ---
         if filename not in self.image_names:
             self.images.append(frame.copy())
             self.image_names.append(filename)
             self.ui.list_model.setStringList(self.image_names)
-            print(f"[Tab2] Added new image: {filename}")
+            print(f"[Tab1] Added new image: {filename}")
         else:
-            print(f"[Tab2] Skipped duplicate image name: {filename}")
+            print(f"[Tab1] Skipped duplicate image name: {filename}")
 
         self.flash_effect()
         self.display_image(frame)
@@ -333,7 +329,7 @@ class Tab1Handler:
     def display_image(self, img):
         """Display captured/static image (zoom/pan enabled)."""
         self._camera_view_active = False
-        self.ui._display_target_tab1._interaction_enabled = True  # ✅ allow zoom/pan
+        self.ui._display_target_tab1._interaction_enabled = True
         pixmap = cvimg_to_qpixmap(img)
         self.ui._display_target_tab1.reset_view()
         self.ui._display_target_tab1.setPixmap(pixmap)
@@ -354,6 +350,13 @@ class Tab1Handler:
 
     def intrinsic_calibrate(self):
         """Run intrinsic calibration."""
+        if self.current_source != "ip_camera":
+            QMessageBox.information(
+                self.ui,
+                "Intrinsic Calibration",
+                "Femto Bolt uses factory intrinsic calibration from camera_data.",
+            )
+            return
         checkerboard = self.get_checkerboard_size()
         if checkerboard == (0, 0):
             QMessageBox.warning(
@@ -362,11 +365,13 @@ class Tab1Handler:
                 "Enter checkerboard inner corners like 9x6 or 6x9.",
             )
             return
+        self.ui.clear_cancel_request()
         calibration.intrinsic_calibrate(
             self.images,
             self.image_names,
             checkerboard,
             square_size=0.022,
             save_path=self.ui.camera_data,
-            display_callback=self.display_image
+            display_callback=self.display_image,
+            cancel_callback=self.ui.should_cancel,
         )

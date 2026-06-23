@@ -99,7 +99,7 @@ Enter the camera password when prompted. Keep the preview window focused:
 
 - Press `Enter` to save an image.
 - Press `q` or `Esc` to stop.
-- Images are saved in `Cameras/ip_camera/intrinsic_images/`.
+- Images are saved in `camera/ip_camera/intrinsic_images/`.
 
 ### 2. Start the Calibration UI
 
@@ -110,11 +110,11 @@ python3 main.py
 In the intrinsic calibration tab, click `Open Folder` and select:
 
 ```text
-/home/elems/Documents/camera-calibration-ui/Cameras/ip_camera
+/home/elems/Documents/camera-calibration-ui/camera/ip_camera
 ```
 
 Run intrinsic calibration before extrinsic calibration. Calibration results are
-saved in `Cameras/ip_camera/camera_data/`.
+saved in `camera/ip_camera/camera_data/`.
 
 ### 3. Record the Undistorted Stream
 
