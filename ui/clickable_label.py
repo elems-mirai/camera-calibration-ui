@@ -58,14 +58,14 @@ class ClickableLabel(QLabel):
         self.repaint()
 
     def reset_view(self):
-        self._zoom_factor = 1.0
-        self._pan_offset = QPoint(0, 0)
+        self._fit_pixmap_to_label()
         self._cached_scaled_pixmap = None
         self._cached_zoom = None
         self.repaint()
 
     def setPixmap(self, pixmap: QPixmap):
         self._original_pixmap = pixmap
+        self._fit_pixmap_to_label()
         self._cached_scaled_pixmap = None
         self._cached_zoom = None
         super().setPixmap(pixmap)
@@ -76,6 +76,7 @@ class ClickableLabel(QLabel):
     # ---------------------------------------------------------
     def paintEvent(self, event):
         if self._original_pixmap is None or self._original_pixmap.isNull():
+            super().paintEvent(event)
             return
 
         painter = QPainter(self)
@@ -198,6 +199,25 @@ class ClickableLabel(QLabel):
         sx = int(x * self._zoom_factor) + self._pan_offset.x()
         sy = int(y * self._zoom_factor) + self._pan_offset.y()
         return (sx, sy)
+
+    def _fit_pixmap_to_label(self):
+        if self._original_pixmap is None or self._original_pixmap.isNull():
+            self._zoom_factor = 1.0
+            self._pan_offset = QPoint(0, 0)
+            return
+
+        pix_w = self._original_pixmap.width()
+        pix_h = self._original_pixmap.height()
+        label_w = max(1, self.width())
+        label_h = max(1, self.height())
+
+        self._zoom_factor = min(label_w / pix_w, label_h / pix_h)
+        scaled_w = int(pix_w * self._zoom_factor)
+        scaled_h = int(pix_h * self._zoom_factor)
+        self._pan_offset = QPoint(
+            max(0, (label_w - scaled_w) // 2),
+            max(0, (label_h - scaled_h) // 2),
+        )
 
     def _throttled_repaint(self, ms: int):
         if not self._repaint_pending:

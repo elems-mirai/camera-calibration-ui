@@ -2,9 +2,14 @@ import os
 import cv2
 import numpy as np
 import time
-from PyQt5.QtWidgets import QFileDialog, QApplication, QMessageBox
+from PyQt5.QtWidgets import QFileDialog, QApplication, QMessageBox, QInputDialog, QLineEdit
 from PyQt5.QtCore import QTimer
-from utils.cv_utils import cvimg_to_qpixmap, detect_and_set_cameras_tab1
+from utils.cv_utils import cvimg_to_qpixmap
+from utils.camera_sources import (
+    create_camera_source,
+    default_camera_folder,
+    ensure_camera_folder,
+)
 from utils import calibration
 from PyQt5.QtWidgets import QFileDialog, QMessageBox
 from PyQt5.QtCore import Qt
@@ -25,11 +30,17 @@ class Tab1Handler:
         self.image_names = []
         self.current_image_name = None
         self.current_original_image = None
+        self.latest_frame = None
         self.capture_folder = None
         self.intrinsic_folder = None
         self.ui.camera_data = None
+        self.current_source = "ip_camera"
+        self._ip_password = os.environ.get("CAMERA_PASSWORD")
 
-        detect_and_set_cameras_tab1(self)
+        self.ui.AvailableCams_tab1.clear()
+        self.ui.AvailableCams_tab1.addItem("IP Camera", "ip_camera")
+        self.ui.AvailableCams_tab1.addItem("Femto Bolt", "femto_bolt")
+        self._apply_source_folder(self.current_source)
 
     # -------------------------------------------------
     # TAB CONTROL
@@ -53,7 +64,7 @@ class Tab1Handler:
             base_dir = QFileDialog.getExistingDirectory(
                 self.ui,
                 "Select Save Folder",
-                "",
+                default_camera_folder(self.current_source),
                 QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks
             )
 
@@ -62,20 +73,7 @@ class Tab1Handler:
                 print("[INFO] No folder selected.")
                 return
 
-            # Folder structure setup
-            self.capture_folder = base_dir
-            self.intrinsic_folder = os.path.join(base_dir, "intrinsic_images")
-            self.ui.camera_data = os.path.join(base_dir, "camera_data")
-            self.ui.points_csv = os.path.join(base_dir, "points.csv")
-
-            # Create folders if missing
-            os.makedirs(self.intrinsic_folder, exist_ok=True)
-            os.makedirs(self.ui.camera_data, exist_ok=True)
-
-            # Load existing images
-            self.images = []
-            self.image_names = []
-            self.load_images_from_directory(self.intrinsic_folder)
+            self._apply_folder(base_dir)
 
             print(f"[Tab2] Folder opened: {base_dir}")
 
@@ -86,70 +84,42 @@ class Tab1Handler:
     # CAMERA CONTROL
     # -------------------------------------------------
     def on_camera_changed(self):
-        """When user selects a camera and save folder."""
-        new_camera_id = self.ui.AvailableCams_tab1.currentData()
-        print(f"[Tab1] Switched to Camera {new_camera_id}")
-
-        QApplication.setAttribute(Qt.AA_DontUseNativeMenuBar, True)
-
-        # Open dialog
-        base_dir = QFileDialog.getExistingDirectory(
-            self.ui,
-            "Select Save Folder",
-            "",
-            QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks
-        )
-
-        # Exit if user cancelled
-        if not base_dir:
-            print("[INFO] No folder selected.")
+        """Switch between the supported camera sources without probing webcams."""
+        source_key = self.ui.AvailableCams_tab1.currentData()
+        if source_key is None:
             return
-
-        # Folder structure
-        self.capture_folder = base_dir
-        self.intrinsic_folder = os.path.join(base_dir, "intrinsic_images")
-        self.ui.camera_data = os.path.join(base_dir, "camera_data")
-        self.ui.points_csv = os.path.join(base_dir, "points.csv")
-
-        # Create folders if missing
-        os.makedirs(self.intrinsic_folder, exist_ok=True)
-        os.makedirs(self.ui.camera_data, exist_ok=True)
-
-        # Load existing images
-        self.images = []
-        self.image_names = []
-        self.load_images_from_directory(self.intrinsic_folder)
-
-        # Restart camera feed
         if self.cap:
-            self.timer.stop()
-            self.cap.release()
-            self.cap = None
-
-        self.cap = cv2.VideoCapture(new_camera_id)
-        if not self.cap.isOpened():
-            print(f"[WARN] Failed to open camera {new_camera_id}")
-            return
-
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.ui.width)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.ui.height)
-        self.set_resolution_camera()
-        self.timer.start(self.fps)
+            self.close_camera()
+        self.current_source = source_key
+        self._apply_source_folder(source_key)
+        print(f"[Tab1] Source changed to {source_key}")
 
     def set_resolution_camera(self):
-        """Add current camera resolution to combo box."""
-        resolution = f"{int(self.ui.width)}x{int(self.ui.height)}"
-        self.ui.CameraDemBox_tab1.clear()
-        self.ui.CameraDemBox_tab1.addItems([resolution])
-        self.ui.CameraDemBox_tab1.setCurrentText(resolution)
+        """Resolution is controlled by the selected stream/topic."""
+        return
 
     def open_camera(self):
         """Open current camera."""
         if self.cap is None:
-            camera_id = self.get_select_camera()
-            self.cap = cv2.VideoCapture(camera_id)
-            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.ui.width)
-            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.ui.height)
+            source_key = self.get_select_camera()
+            password = self._get_ip_password() if source_key == "ip_camera" else None
+            if source_key == "ip_camera" and not password:
+                return
+            try:
+                self.cap = create_camera_source(source_key, password=password)
+            except Exception as e:
+                QMessageBox.critical(self.ui, "Camera Error", str(e))
+                self.cap = None
+                return
+            if not self.cap.isOpened():
+                if source_key == "ip_camera":
+                    self._ip_password = None
+                    message = "Failed to open IP Camera. Check the password or RTSP settings."
+                else:
+                    message = f"Failed to open {source_key}."
+                QMessageBox.warning(self.ui, "Camera Error", message)
+                self.cap = None
+                return
             self.set_resolution_camera()
         self.timer.start(self.fps)
 
@@ -160,12 +130,40 @@ class Tab1Handler:
         if self.cap:
             self.cap.release()
             self.cap = None
+        self.latest_frame = None
         self.ui._display_target_tab1.clear()
         print("[Tab1] Camera closed")
 
     def get_select_camera(self):
-        """Return selected camera ID."""
+        """Return selected camera source key."""
         return self.ui.AvailableCams_tab1.currentData()
+
+    def _get_ip_password(self):
+        if self._ip_password:
+            return self._ip_password
+        password, ok = QInputDialog.getText(
+            self.ui,
+            "IP Camera Password",
+            "Password:",
+            QLineEdit.Password,
+        )
+        if ok and password:
+            self._ip_password = password
+            return password
+        return None
+
+    def _apply_source_folder(self, source_key):
+        self._apply_folder(default_camera_folder(source_key))
+
+    def _apply_folder(self, base_dir):
+        ensure_camera_folder(base_dir)
+        self.capture_folder = base_dir
+        self.intrinsic_folder = os.path.join(base_dir, "intrinsic_images")
+        self.ui.camera_data = os.path.join(base_dir, "camera_data")
+        self.ui.points_csv = os.path.join(base_dir, "points.csv")
+        self.images = []
+        self.image_names = []
+        self.load_images_from_directory(self.intrinsic_folder)
 
     def update_camera_frame(self):
         """Display live feed (optimized for ClickableLabel)."""
@@ -175,6 +173,7 @@ class Tab1Handler:
         if self.cap:
             ret, frame = self.cap.read()
             if ret:
+                self.latest_frame = frame.copy()
                 # During camera feed, disable zoom/pan
                 self.ui._display_target_tab1._interaction_enabled = False
 
@@ -193,11 +192,17 @@ class Tab1Handler:
     def take_picture(self):
         """Capture and save image to intrinsic_images folder."""
         if not self.cap:
+            self.open_camera()
+        if not self.cap:
             print("[Tab1] Camera not open!")
             return
 
-        ret, frame = self.cap.read()
-        if not ret:
+        frame = self.latest_frame.copy() if self.latest_frame is not None else None
+        if frame is None:
+            ret, frame = self.cap.read()
+            if ret:
+                self.latest_frame = frame.copy()
+        if frame is None:
             print("[Tab1] Failed to capture")
             return
 
@@ -226,10 +231,10 @@ class Tab1Handler:
             print(f"[Tab2] Skipped duplicate image name: {filename}")
 
         self.flash_effect()
-        self.close_camera()
         self.display_image(frame)
         self.current_image_name = filename
         self.current_original_image = frame.copy()
+        self.timer.start(self.fps)
         print(f"[Tab1] Captured and saved {filename}")
 
     def flash_effect(self):
@@ -265,12 +270,6 @@ class Tab1Handler:
 
         self.ui.list_model.setStringList(self.image_names)
         print(f"[Tab1] Loaded {len(self.images)} images from {folder_path}")
-
-        if self.images:
-            self.current_original_image = self.images[0].copy()
-            self.current_image_name = self.image_names[0]
-            self.display_image(self.images[0])
-            print(f"[Tab1] Showing first image: {self.current_image_name}")
 
     def delete_selected_image(self):
         """Delete selected image from folder and UI."""
@@ -356,6 +355,13 @@ class Tab1Handler:
     def intrinsic_calibrate(self):
         """Run intrinsic calibration."""
         checkerboard = self.get_checkerboard_size()
+        if checkerboard == (0, 0):
+            QMessageBox.warning(
+                self.ui,
+                "Invalid Checkerboard Size",
+                "Enter checkerboard inner corners like 9x6 or 6x9.",
+            )
+            return
         calibration.intrinsic_calibrate(
             self.images,
             self.image_names,

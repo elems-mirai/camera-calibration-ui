@@ -3,12 +3,17 @@ import os
 import cv2
 import time
 import pandas as pd
-from PyQt5.QtWidgets import QFileDialog, QApplication, QMessageBox
+from PyQt5.QtWidgets import QFileDialog, QApplication, QMessageBox, QInputDialog, QLineEdit
 from PyQt5.QtCore import QTimer
 from PyQt5.QtGui import QDoubleValidator
 from PyQt5.QtCore import Qt
 
-from utils.cv_utils import cvimg_to_qpixmap, detect_and_set_cameras
+from utils.cv_utils import cvimg_to_qpixmap
+from utils.camera_sources import (
+    create_camera_source,
+    default_camera_folder,
+    ensure_camera_folder,
+)
 from utils.io_utils import save_points
 from utils.point_pred import predict_checkerboard_points
 from utils.calibration import extrinsic_calibrate
@@ -23,19 +28,24 @@ class Tab2Handler:
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_camera_frame)
         self.fps = (1000 // self.ui.frame_rate)
-        detect_and_set_cameras(self)
+        self.ui.AvailableCams.clear()
+        self.ui.AvailableCams.addItem("IP Camera", "ip_camera")
+        self.ui.AvailableCams.addItem("Femto Bolt", "femto_bolt")
 
         self.images = []
         self.image_names = []
         self.current_image_name = None
         self.current_original_image = None
+        self.latest_frame = None
         self.capture_folder = None
         self.extrinsic_folder = None          # ✅ FIX 4: always initialised
-        self.current_camera_id = None
+        self.current_camera_id = "ip_camera"
         self._camera_folders = {}
         self.ui.camera_data = None
         self.ui.points_csv = "points.csv"
         self._folder_selected = False 
+        self._ip_password = os.environ.get("CAMERA_PASSWORD")
+        self._apply_folder(default_camera_folder(self.current_camera_id), camera_id=self.current_camera_id)
 
         # ✅ FIX 5: only one validator call
         self._setup_validators()
@@ -51,7 +61,7 @@ class Tab2Handler:
         from PyQt5.QtCore import QRegExp
         regex = QRegExp(r"^-?\d*\.?\d*$")
         validator = QRegExpValidator(regex)
-        for i in range(1, 6):
+        for i in range(1, 7):
             getattr(self.ui, f"ImgPnt{i}X").setValidator(validator)
             getattr(self.ui, f"ImgPnt{i}Y").setValidator(validator)
             getattr(self.ui, f"WrldPnt{i}X").setValidator(validator)
@@ -71,10 +81,10 @@ class Tab2Handler:
                 getattr(self.ui, f"WrldPnt{i}X"),
                 getattr(self.ui, f"WrldPnt{i}Y"),
             )
-            for i in range(1, 6)
+            for i in range(1, 7)
         }
 
-        for i in range(1, 6):
+        for i in range(1, 7):
             _, imgx, imgy, wrldx, wrldy = self._point_map[i]
             # capture i by default-arg to avoid closure-over-loop-var bug
             wrldx.returnPressed.connect(lambda _w=wrldy: _w.setFocus())
@@ -94,7 +104,7 @@ class Tab2Handler:
 
             # If world coords already filled → advance to next point first
             if wx and wy:
-                next_i = (i % 5) + 1
+                next_i = (i % 6) + 1
                 self._point_map[next_i][0].setChecked(True)
                 # Re-enter with the new active point
                 self._on_image_clicked(x, y)
@@ -112,7 +122,7 @@ class Tab2Handler:
         """Called when user presses Enter on the world-Y field of point i."""
         _, _, _, wrldx, wrldy = self._point_map[i]
         wrldy.clearFocus()
-        next_i = (i % 5) + 1
+        next_i = (i % 6) + 1
         self._point_map[next_i][0].setChecked(True)
         self.auto_save_points()
         print(f"[Tab2] World coords confirmed for Point {i} → switched to Point {next_i}")
@@ -132,13 +142,11 @@ class Tab2Handler:
     # FOLDER
     # -------------------------------------------------
     def _apply_folder(self, base_dir, camera_id=None, load_images=True):
+        ensure_camera_folder(base_dir)
         self.capture_folder = base_dir
         self.extrinsic_folder = os.path.join(base_dir, "extrinsic_images")
         self.ui.camera_data = os.path.join(base_dir, "camera_data")
         self.ui.points_csv = os.path.join(base_dir, "points.csv")
-
-        os.makedirs(self.extrinsic_folder, exist_ok=True)
-        os.makedirs(self.ui.camera_data, exist_ok=True)
 
         if load_images:
             self.images, self.image_names = [], []
@@ -154,7 +162,7 @@ class Tab2Handler:
     def open_folder(self):
         try:
             base_dir = QFileDialog.getExistingDirectory(
-                self.ui, "Select Save Folder", "",
+                self.ui, "Select Save Folder", default_camera_folder(self.current_camera_id),
                 QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks
             )
             if not base_dir:
@@ -170,63 +178,64 @@ class Tab2Handler:
     # CAMERA  (fix 1 — no folder dialog here)
     # -------------------------------------------------
     def on_camera_changed(self):
-        """Switch camera and ask for a folder the first time that camera is used."""
-        new_camera_id = self.ui.AvailableCams.currentData()
-        if new_camera_id is None:
+        """Switch between the supported camera sources without probing webcams."""
+        source_key = self.ui.AvailableCams.currentData()
+        if source_key is None:
             return
-        print(f"[Tab2] Camera changed → {new_camera_id}")
+        print(f"[Tab2] Source changed → {source_key}")
 
-        self.current_camera_id = new_camera_id
+        self.current_camera_id = source_key
 
-        if new_camera_id in self._camera_folders:
-            self._apply_folder(self._camera_folders[new_camera_id], camera_id=new_camera_id, load_images=True)
+        if source_key in self._camera_folders:
+            self._apply_folder(self._camera_folders[source_key], camera_id=source_key, load_images=True)
         else:
-            base_dir = QFileDialog.getExistingDirectory(
-                self.ui,
-                "Select Save Folder",
-                "",
-                QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks
-            )
-            if not base_dir:
-                print("[Tab2] Folder selection cancelled — camera not opened.")
-                return
-            self._apply_folder(base_dir, camera_id=new_camera_id, load_images=True)
-            print(f"[Tab2] Folder set for camera {new_camera_id}: {base_dir}")
+            self._apply_folder(default_camera_folder(source_key), camera_id=source_key, load_images=True)
 
-        # ── Switch camera feed ───────────────────────────────────────
         if self.cap:
-            self.timer.stop()
-            self.cap.release()
-            self.cap = None
-
-        self.cap = cv2.VideoCapture(new_camera_id, cv2.CAP_V4L2)
-        if not self.cap.isOpened():
-            print(f"[WARN] Failed to open camera {new_camera_id}")
-            self.cap = None
-            return
-
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH,  self.ui.width)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.ui.height)
-        self._update_resolution_box()
-        self.clear_points()
-        self.timer.start(self.fps)
-        print(f"[Tab2] Camera {new_camera_id} opened.")
+            self.close_camera()
 
     def _update_resolution_box(self):
-        resolution = f"{int(self.ui.width)}x{int(self.ui.height)}"
-        self.ui.CameraDemBox.clear()
-        self.ui.CameraDemBox.addItems([resolution])
-        self.ui.CameraDemBox.setCurrentText(resolution)
+        """Resolution is controlled by the selected stream/topic."""
+        return
 
     def open_camera(self):
         if self.cap is None:
-            camera_id = self.ui.AvailableCams.currentData()
-            self.cap = cv2.VideoCapture(camera_id)
-            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.ui.width)
-            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.ui.height)
+            source_key = self.ui.AvailableCams.currentData()
+            password = self._get_ip_password() if source_key == "ip_camera" else None
+            if source_key == "ip_camera" and not password:
+                return
+            try:
+                self.cap = create_camera_source(source_key, password=password)
+            except Exception as e:
+                QMessageBox.critical(self.ui, "Camera Error", str(e))
+                self.cap = None
+                return
+            if not self.cap.isOpened():
+                if source_key == "ip_camera":
+                    self._ip_password = None
+                    message = "Failed to open IP Camera. Check the password or RTSP settings."
+                else:
+                    message = f"Failed to open {source_key}."
+                QMessageBox.warning(self.ui, "Camera Error", message)
+                self.cap = None
+                return
             self._update_resolution_box()
         self.clear_points()
         self.timer.start(self.fps)
+
+    def _get_ip_password(self):
+        if self._ip_password:
+            return self._ip_password
+        password, ok = QInputDialog.getText(
+            self.ui,
+            "IP Camera Password",
+            "Password:",
+            QLineEdit.Password,
+        )
+        if ok and password:
+            self._ip_password = password
+            return password
+        return None
 
     def close_camera(self):
         if self.timer.isActive():
@@ -234,6 +243,7 @@ class Tab2Handler:
         if self.cap:
             self.cap.release()
             self.cap = None
+        self.latest_frame = None
         self.ui._display_target_tab2.clear()
         print("[Tab2] Camera closed")
 
@@ -243,6 +253,7 @@ class Tab2Handler:
         if self.cap:
             ret, frame = self.cap.read()
             if ret:
+                self.latest_frame = frame.copy()
                 self.ui._display_target_tab2._interaction_enabled = False
                 if not getattr(self, "_camera_view_active", False):
                     self.ui._display_target_tab2.reset_view()
@@ -256,11 +267,17 @@ class Tab2Handler:
     def take_picture(self):
         self.ui.imgPnt1.setChecked(True)
         if not self.cap:
+            self.open_camera()
+        if not self.cap:
             print("[Tab2] Camera not open!")
             return
 
-        ret, frame = self.cap.read()
-        if not ret:
+        frame = self.latest_frame.copy() if self.latest_frame is not None else None
+        if frame is None:
+            ret, frame = self.cap.read()
+            if ret:
+                self.latest_frame = frame.copy()
+        if frame is None:
             print("[Tab2] Failed to capture")
             return
 
@@ -289,10 +306,10 @@ class Tab2Handler:
             self.ui.list_model_tab2.setStringList(self.image_names)
 
         self.flash_effect()
-        self.close_camera()
         self.display_image(frame)
         self.current_image_name = filename
         self.current_original_image = frame.copy()
+        self.timer.start(self.fps)
         print(f"[Tab2] Captured: {save_path}")
 
     def flash_effect(self):
@@ -333,11 +350,7 @@ class Tab2Handler:
                     self.image_names.append(fn)
 
         self.ui.list_model_tab2.setStringList(self.image_names)
-        if self.images:
-            self.current_image_name = self.image_names[0]
-            self.current_original_image = self.images[0].copy()
-            self.display_image(self.images[0])
-            print(f"[Tab2] Loaded {len(self.images)} images")
+        print(f"[Tab2] Loaded {len(self.images)} images")
 
     def show_selected_image_index(self, index):
         if not self.images:
@@ -387,7 +400,7 @@ class Tab2Handler:
             return
 
         self.ui._display_target_tab2.clear_points()
-        for i in range(1, 6):
+        for i in range(1, 7):
             getattr(self.ui, f"ImgPnt{i}X").clear()
             getattr(self.ui, f"ImgPnt{i}Y").clear()
             # ✅ FIX 3: also clear world point fields
@@ -470,7 +483,7 @@ class Tab2Handler:
 
     def clear_points(self):
         self.ui._display_target_tab2.clear_points()
-        for i in range(1, 6):
+        for i in range(1, 7):
             getattr(self.ui, f"ImgPnt{i}X").clear()
             getattr(self.ui, f"ImgPnt{i}Y").clear()
             getattr(self.ui, f"WrldPnt{i}X").clear()
@@ -486,7 +499,7 @@ class Tab2Handler:
             self.ui._display_target_tab2.clear_points()
 
             n_points = len(rows)
-            next_index = (n_points % 5) + 1
+            next_index = (n_points % 6) + 1
             self._point_map[next_index][0].setChecked(True)
 
             for _, row in rows.iterrows():
@@ -528,7 +541,7 @@ class Tab2Handler:
         if not self.current_image_name:
             return
         points_to_save = []
-        for i in range(1, 6):
+        for i in range(1, 7):
             x_text  = self._point_map[i][1].text().strip()
             y_text  = self._point_map[i][2].text().strip()
             xw_text = self._point_map[i][3].text().strip()
