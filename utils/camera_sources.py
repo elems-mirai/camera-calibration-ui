@@ -19,6 +19,9 @@ IP_CAMERA_STREAM_PATH = os.environ.get(
 )
 IP_CAMERA_DRAIN_FRAMES = max(0, int(os.environ.get("IP_CAMERA_DRAIN_FRAMES", "3")))
 FEMTO_COLOR_TOPIC = os.environ.get("FEMTO_COLOR_TOPIC", "/camera/color/image_raw")
+FEMTO_UNDISTORT = os.environ.get("FEMTO_UNDISTORT", "1") != "0"
+FEMTO_EXPECTED_WIDTH = int(os.environ.get("FEMTO_EXPECTED_WIDTH", "1920"))
+FEMTO_EXPECTED_HEIGHT = int(os.environ.get("FEMTO_EXPECTED_HEIGHT", "1080"))
 
 
 def default_camera_folder(source_key):
@@ -94,6 +97,67 @@ def _ros_image_to_bgr(msg):
     return image.copy()
 
 
+class Undistorter:
+    def __init__(self, camera_data_dir):
+        self.camera_data_dir = Path(camera_data_dir)
+        self.camera_matrix = None
+        self.distortion = None
+        self.new_camera_matrix = None
+        self.maps = {}
+        self.last_warning = None
+        self._warned_sizes = set()
+        self._load()
+
+    def _load(self):
+        camera_matrix_path = self.camera_data_dir / "camera_matrix.npy"
+        distortion_path = self.camera_data_dir / "distortion_coeff.npy"
+        if not camera_matrix_path.is_file() or not distortion_path.is_file():
+            return
+
+        self.camera_matrix = np.load(camera_matrix_path)
+        self.distortion = np.load(distortion_path)
+        new_matrix_path = self.camera_data_dir / "new_camera_matrix.npy"
+        self.new_camera_matrix = (
+            np.load(new_matrix_path)
+            if new_matrix_path.is_file()
+            else self.camera_matrix.copy()
+        )
+
+    def is_ready(self):
+        return self.camera_matrix is not None and self.distortion is not None
+
+    def apply(self, frame):
+        if not self.is_ready():
+            return frame
+
+        height, width = frame.shape[:2]
+        if (width, height) != (FEMTO_EXPECTED_WIDTH, FEMTO_EXPECTED_HEIGHT):
+            warning = (
+                "[Femto] Raw frame size does not match intrinsic matrix: "
+                f"frame={width}x{height}, expected={FEMTO_EXPECTED_WIDTH}x{FEMTO_EXPECTED_HEIGHT}. "
+                "Using raw frame."
+            )
+            self.last_warning = warning
+            if (width, height) not in self._warned_sizes:
+                print(warning)
+                self._warned_sizes.add((width, height))
+            return frame
+
+        self.last_warning = None
+        key = (width, height)
+        if key not in self.maps:
+            self.maps[key] = cv2.initUndistortRectifyMap(
+                self.camera_matrix,
+                self.distortion,
+                None,
+                self.new_camera_matrix,
+                (width, height),
+                cv2.CV_32FC1,
+            )
+        map_x, map_y = self.maps[key]
+        return cv2.remap(frame, map_x, map_y, cv2.INTER_LINEAR)
+
+
 class FemtoRos1Stream:
     def __init__(self):
         try:
@@ -106,6 +170,12 @@ class FemtoRos1Stream:
 
         self.rospy = rospy
         self.latest_frame = None
+        self.undistorter = (
+            Undistorter(DEFAULT_CAMERA_FOLDERS["femto_bolt"] / "camera_data")
+            if FEMTO_UNDISTORT
+            else None
+        )
+        self.last_warning = None
 
         if not rospy.core.is_initialized():
             rospy.init_node(
@@ -134,7 +204,11 @@ class FemtoRos1Stream:
     def read(self):
         if self.latest_frame is None:
             return False, None
-        return True, self.latest_frame.copy()
+        frame = self.latest_frame.copy()
+        if self.undistorter is not None:
+            frame = self.undistorter.apply(frame)
+            self.last_warning = self.undistorter.last_warning
+        return True, frame
 
     def release(self):
         if self.subscriber is not None:
@@ -158,6 +232,12 @@ class FemtoRos2Stream:
         self.latest_frame = None
         self.node = None
         self.subscription = None
+        self.undistorter = (
+            Undistorter(DEFAULT_CAMERA_FOLDERS["femto_bolt"] / "camera_data")
+            if FEMTO_UNDISTORT
+            else None
+        )
+        self.last_warning = None
 
         if not rclpy.ok():
             rclpy.init(args=None)
@@ -184,7 +264,11 @@ class FemtoRos2Stream:
             self.rclpy.spin_once(self.node, timeout_sec=0.01)
         if self.latest_frame is None:
             return False, None
-        return True, self.latest_frame.copy()
+        frame = self.latest_frame.copy()
+        if self.undistorter is not None:
+            frame = self.undistorter.apply(frame)
+            self.last_warning = self.undistorter.last_warning
+        return True, frame
 
     def release(self):
         if self.node is not None:

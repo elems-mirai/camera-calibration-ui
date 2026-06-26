@@ -42,6 +42,7 @@ class Tab2Handler:
         self.ui.points_csv = "points.csv"
         self._folder_selected = False 
         self._ip_password = os.environ.get("CAMERA_PASSWORD")
+        self._last_camera_warning = None
         self._apply_folder(default_camera_folder(self.current_camera_id), camera_id=self.current_camera_id)
 
         self._setup_validators()
@@ -84,6 +85,8 @@ class Tab2Handler:
             _, imgx, imgy, wrldx, wrldy = self._point_map[i]
             # capture i by default-arg to avoid closure-over-loop-var bug
             wrldx.returnPressed.connect(lambda _w=wrldy: _w.setFocus())
+            wrldx.editingFinished.connect(lambda _i=i: self._on_world_point_changed(_i))
+            wrldy.editingFinished.connect(lambda _i=i: self._on_world_point_changed(_i))
             wrldy.returnPressed.connect(lambda _i=i: self._on_world_point_entered(_i))
 
         self.ui._display_target_tab2.set_click_callback(self._on_image_clicked)
@@ -121,7 +124,15 @@ class Tab2Handler:
         next_i = (i % 6) + 1
         self._point_map[next_i][0].setChecked(True)
         self.auto_save_points()
-        print(f"[Tab2] World coords confirmed for Point {i} → switched to Point {next_i}")
+        print(f"[Tab2] World coords confirmed for Point {i} -> switched to Point {next_i}")
+
+    def _on_world_point_changed(self, i):
+        """Save world coordinate edits when a field loses focus."""
+        if getattr(self, "_loading_points", False):
+            return
+        _, _, _, wrldx, wrldy = self._point_map[i]
+        if wrldx.text().strip() or wrldy.text().strip():
+            self.auto_save_points()
 
     # -------------------------------------------------
     # TAB CONTROL
@@ -241,6 +252,7 @@ class Tab2Handler:
         if self.cap:
             self.cap.release()
             self.cap = None
+        self._last_camera_warning = None
         self.latest_frame = None
         self.ui._display_target_tab2.clear()
         print("[Tab2] Camera closed")
@@ -251,6 +263,7 @@ class Tab2Handler:
         if self.cap:
             ret, frame = self.cap.read()
             if ret:
+                self._show_camera_warning_once()
                 self.latest_frame = frame.copy()
                 self.ui._display_target_tab2._interaction_enabled = False
                 if not getattr(self, "_camera_view_active", False):
@@ -258,6 +271,13 @@ class Tab2Handler:
                     self._camera_view_active = True
                 pixmap = cvimg_to_qpixmap(frame)
                 self.ui._display_target_tab2.setPixmap(pixmap)
+
+    def _show_camera_warning_once(self):
+        warning = getattr(self.cap, "last_warning", None)
+        if not warning or warning == self._last_camera_warning:
+            return
+        self._last_camera_warning = warning
+        QMessageBox.warning(self.ui, "Camera Resolution Mismatch", warning)
 
     # -------------------------------------------------
     # CAPTURE
@@ -473,6 +493,7 @@ class Tab2Handler:
         if not os.path.exists(csv_file):
             return
         try:
+            self._loading_points = True
             df = pd.read_csv(csv_file)
             rows = df[df["image_name"] == image_name]
             self.ui._display_target_tab2.clear_points()
@@ -500,6 +521,8 @@ class Tab2Handler:
             print(f"[Tab2] Loaded {len(rows)} points for {image_name}")
         except Exception as e:
             print(f"[Tab2] Error loading points: {e}")
+        finally:
+            self._loading_points = False
 
     def auto_save_points(self):
         if self.current_image_name and not getattr(self, "_loading_points", False):
@@ -558,7 +581,12 @@ class Tab2Handler:
             if not save_path or not os.path.exists(save_path):
                 print("[Tab2] camera_data folder not found!")
                 return
-            rvec, tvec = extrinsic_calibrate(points_csv, save_path)
+            use_undistorted = self.current_camera_id == "femto_bolt"
+            rvec, tvec = extrinsic_calibrate(
+                points_csv,
+                save_path,
+                use_undistorted_image=use_undistorted,
+            )
             if rvec is not None and tvec is not None:
                 print(f"[Tab2] Calibration done\nrvec:\n{rvec}\ntvec:\n{tvec}")
             else:

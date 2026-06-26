@@ -45,6 +45,19 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument("--prefix", default="capture", help="saved filename prefix")
+    parser.add_argument(
+        "--drain-frames",
+        type=int,
+        default=int(os.environ.get("IP_CAMERA_DRAIN_FRAMES", "3")),
+        help="number of stale RTSP frames to drop before displaying/saving",
+    )
+    parser.add_argument(
+        "--no-mirror-preview",
+        action="store_true",
+        help="disable horizontal mirror in the preview window",
+    )
+    parser.add_argument("--expected-width", type=int, default=2688)
+    parser.add_argument("--expected-height", type=int, default=1520)
     return parser.parse_args()
 
 
@@ -71,7 +84,12 @@ def main() -> int:
     stream_url = make_stream_url(args, password)
 
     args.save_path.mkdir(parents=True, exist_ok=True)
+    os.environ.setdefault(
+        "OPENCV_FFMPEG_CAPTURE_OPTIONS",
+        "rtsp_transport;tcp|fflags;nobuffer|flags;low_delay|max_delay;500000",
+    )
     camera = cv2.VideoCapture(stream_url, cv2.CAP_FFMPEG)
+    camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
     if not camera.isOpened():
         print(
             "Could not open the camera stream. Check the credentials and RTSP endpoint; "
@@ -81,23 +99,41 @@ def main() -> int:
         return 1
 
     print(f"Connected. Images will be saved in: {args.save_path.resolve()}")
+    print("Preview is mirrored. Saved images are not mirrored.")
     print("Focus the preview window. Press Enter to capture; press q or Esc to quit.")
 
     window_name = "IP Camera Capture"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(window_name, 1280, 720)
+    printed_resolution = False
 
     try:
         while True:
-            ok, frame = camera.read()
+            for _ in range(max(0, args.drain_frames)):
+                if not camera.grab():
+                    break
+            ok, frame = camera.retrieve()
+            if not ok or frame is None:
+                ok, frame = camera.read()
             if not ok or frame is None:
                 print("Failed to read a frame from the camera.", file=sys.stderr)
                 continue
 
-            preview = frame.copy()
+            if not printed_resolution:
+                height, width = frame.shape[:2]
+                print(f"Camera frame size: {width}x{height}")
+                if (width, height) != (args.expected_width, args.expected_height):
+                    print(
+                        f"Warning: expected {args.expected_width}x{args.expected_height}, "
+                        f"but stream is {width}x{height}.",
+                        file=sys.stderr,
+                    )
+                printed_resolution = True
+
+            preview = cv2.flip(frame, 1) if not args.no_mirror_preview else frame.copy()
             cv2.putText(
                 preview,
-                "ENTER: capture    Q/ESC: quit",
+                "ENTER: capture    Q/ESC: quit    saved: original",
                 (20, 40),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.9,

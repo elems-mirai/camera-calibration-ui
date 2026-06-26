@@ -310,7 +310,7 @@ def intrinsic_show_popup(successful, total, calibration_rms=None, mean_error=Non
 #----------------------------------------------------------
 # EXTRINSIC CALIBRATION
 #----------------------------------------------------------
-def extrinsic_calibrate(points_csv, save_path):
+def extrinsic_calibrate(points_csv, save_path, use_undistorted_image=False):
 
     try:
         if save_path is None or not isinstance(save_path, str):
@@ -327,6 +327,14 @@ def extrinsic_calibrate(points_csv, save_path):
 
     dist_coeff   = np.load(os.path.join(save_path, "distortion_coeff.npy"))
     cameraMatrix = np.load(os.path.join(save_path, "camera_matrix.npy"))
+    if use_undistorted_image:
+        new_matrix_path = os.path.join(save_path, "new_camera_matrix.npy")
+        if os.path.exists(new_matrix_path):
+            cameraMatrix = np.load(new_matrix_path)
+        dist_coeff = np.zeros_like(dist_coeff)
+        print("[Calibration] Extrinsic mode: undistorted image points")
+    else:
+        print("[Calibration] Extrinsic mode: raw distorted image points")
 
     df = pd.read_csv(points_csv)
 
